@@ -42,6 +42,10 @@ export default function CashClosing() {
     date: parseDateInput(selectedDate),
   });
 
+  const { data: expensesForDate } = trpc.expenses.byDate.useQuery({
+    date: parseDateInput(selectedDate),
+  });
+
   const createClosingMutation = trpc.cashClosings.create.useMutation({
     onSuccess: () => {
       utils.cashClosings.byDate.invalidate({ date: parseDateInput(selectedDate) });
@@ -124,6 +128,21 @@ export default function CashClosing() {
       `Transferencia: $${(dailyBalance.transferSales / 100).toLocaleString("es-CO")}`
     ];
     sales.forEach(line => { doc.text(line, 20, yPosition); yPosition += 7; });
+
+    // Gastos del día
+    const expensesTotal = (Array.isArray(expensesForDate) ? (expensesForDate.reduce((s: number, e: any) => s + (e.amount || 0), 0) / 100) : 0);
+    yPosition += 5;
+    doc.setFontSize(14);
+    doc.text("GASTOS", 20, yPosition);
+    yPosition += 8;
+    doc.setFontSize(11);
+    doc.text(`Total Gastos: $${expensesTotal.toLocaleString("es-CO")}`, 20, yPosition);
+    yPosition += 7;
+
+    const netAfterExpenses = (dailyBalance.totalSales / 100) - expensesTotal;
+    doc.setFontSize(12);
+    doc.text(`Neto (Ventas - Gastos): $${netAfterExpenses.toLocaleString("es-CO")}`, 20, yPosition);
+    yPosition += 10;
 
     yPosition += 5;
     doc.setFontSize(14);
@@ -385,6 +404,18 @@ export default function CashClosing() {
                     <span className="text-sm" style={{ color: "oklch(0.55 0.01 260)" }}>Transacciones</span>
                     <span className="text-lg font-bold" style={{ color: "#a78bfa" }}>
                       {dailyBalance.transactionCount || 0}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2 border-t" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                    <span className="text-sm" style={{ color: "oklch(0.55 0.01 260)" }}>Gastos</span>
+                    <span className="text-lg font-bold" style={{ color: "#ef4444" }}>
+                      ${((Array.isArray(expensesForDate) ? expensesForDate.reduce((s: number, e: any) => s + (e.amount || 0), 0) : 0) / 100).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-2" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
+                    <span className="text-sm" style={{ color: "oklch(0.55 0.01 260)" }}>Neto (Ventas - Gastos)</span>
+                    <span className="text-lg font-bold" style={{ color: "#10b981" }}>
+                      ${(dailyBalance.totalSales / 100 - (Array.isArray(expensesForDate) ? expensesForDate.reduce((s: number, e: any) => s + (e.amount || 0), 0) : 0) / 100).toLocaleString()}
                     </span>
                   </div>
                 </div>

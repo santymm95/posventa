@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import ScreenSaver from "./components/ScreenSaver";
 import NotFound from "@/pages/NotFound";
 import { Route, Switch, useLocation } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -14,42 +15,7 @@ import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import CashClosing from "./pages/CashClosing";
 import TransactionHistory from "./pages/TransactionHistory";
-import { supabase } from "./supabaseClient";
-
-function SupabaseConnectionProbe() {
-  const [status, setStatus] = useState("Revisando conexión a Supabase...");
-
-  useEffect(() => {
-    async function probar() {
-      if (!supabase) {
-        const message = "Supabase no está configurado. Agrega la URL y la clave anon en .env.";
-        setStatus(message);
-        console.warn(message);
-        return;
-      }
-
-      const { data, error } = await supabase.from("products").select("*").limit(1);
-
-      if (error) {
-        const message = `Error conectando a Supabase: ${error.message}`;
-        setStatus(message);
-        console.error(message, error);
-      } else {
-        const message = `¡Conexión exitosa! Se recibieron ${data?.length ?? 0} productos.`;
-        setStatus(message);
-        console.log(message, data);
-      }
-    }
-
-    void probar();
-  }, []);
-
-  return (
-    <div style={{ position: "fixed", top: 8, right: 8, zIndex: 9999, background: status.includes("Error") ? "#fee2e2" : status.includes("exitosa") ? "#dcfce7" : "#fef3c7", color: "#111827", padding: "8px 12px", borderRadius: 8, fontSize: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.15)", maxWidth: 320 }}>
-      {status}
-    </div>
-  );
-}
+import Expenses from "./pages/Expenses";
 
 function Router() {
   const [location] = useLocation();
@@ -69,6 +35,7 @@ function Router() {
       <Route path={"/users"} component={Users} />
       <Route path={"/settings"} component={Settings} />
       <Route path={"/cash-closing"} component={CashClosing} />
+      <Route path={"/expenses"} component={Expenses} />
       <Route path={"/transaction-history"} component={TransactionHistory} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
@@ -114,7 +81,7 @@ function App() {
       >
         <TooltipProvider>
           <Toaster />
-          <SupabaseConnectionProbe />
+          <ScreenSaver />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

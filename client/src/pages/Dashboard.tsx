@@ -30,6 +30,8 @@ export default function Dashboard() {
     totalCash: 0,
     totalTransfer: 0,
     totalCredit: 0,
+    totalExpenses: 0,
+    netProfit: 0,
     transactionCount: 0,
   });
 
@@ -66,12 +68,25 @@ export default function Dashboard() {
           ? salesPayload[0]?.result?.data?.json
           : salesPayload;
 
+        const expensesResponse = await fetch(
+          `/api/trpc/expenses.byDate?batch=1&input=${encodeURIComponent(JSON.stringify(payload))}`,
+          { credentials: "include" }
+        );
+        const expensesPayload = await expensesResponse.json();
+        const expensesData = Array.isArray(expensesPayload)
+          ? expensesPayload[0]?.result?.data?.json
+          : expensesPayload;
+
         if (balanceData && (balanceData.totalSales || balanceData.cashSales || balanceData.transferSales || balanceData.creditSales)) {
+          const expensesTotal = Array.isArray(expensesData) ? (expensesData.reduce((s: number, e: any) => s + (e.amount || 0), 0) / 100) : 0;
+          const totalSalesCalc = (balanceData.totalSales || 0) / 100;
           setSummary({
-            totalSales: (balanceData.totalSales || 0) / 100,
+            totalSales: totalSalesCalc,
             totalCash: (balanceData.cashSales || 0) / 100,
             totalTransfer: (balanceData.transferSales || 0) / 100,
             totalCredit: (balanceData.creditSales || 0) / 100,
+            totalExpenses: expensesTotal,
+            netProfit: totalSalesCalc - expensesTotal,
             transactionCount: balanceData.transactionCount || salesData?.length || 0,
           });
           return;
@@ -90,11 +105,14 @@ export default function Dashboard() {
             else if (sale.paymentMethod === "fiado") creditAmount += amount;
           });
 
+          const expensesTotal = Array.isArray(expensesData) ? (expensesData.reduce((s: number, e: any) => s + (e.amount || 0), 0) / 100) : 0;
           setSummary({
             totalSales: totalAmount,
             totalCash: cashAmount,
             totalTransfer: transferAmount,
             totalCredit: creditAmount,
+            totalExpenses: expensesTotal,
+            netProfit: totalAmount - expensesTotal,
             transactionCount: salesData.length,
           });
         }
@@ -112,7 +130,7 @@ export default function Dashboard() {
     }
   }, [isLoading, user, setLocation]);
 
-  const { totalSales, totalCash, totalTransfer, totalCredit, transactionCount } = summary;
+  const { totalSales, totalCash, totalTransfer, totalCredit, totalExpenses, netProfit, transactionCount } = summary;
 
   const handleLogout = async () => {
     try {
@@ -184,6 +202,15 @@ export default function Dashboard() {
       href: "/transaction-history",
       restricted: true,
     },
+    {
+      title: "Gastos",
+      description: "Registrar y revisar gastos",
+      icon: Flame,
+      gradient: "from-rose-500 to-pink-600",
+      glowColor: "rgba(239,68,68,0.4)",
+      href: "/expenses",
+      restricted: true,
+    },
   ];
 
   const navigationCards =
@@ -222,6 +249,22 @@ export default function Dashboard() {
       color: "#38bdf8",
       glowColor: "rgba(56,189,248,0.20)",
       icon: BarChart3,
+    },
+    {
+      label: "Gastos",
+      value: `$${(totalExpenses || 0).toLocaleString()}`,
+      sub: "Registrados",
+      color: "#ef4444",
+      glowColor: "rgba(239,68,68,0.20)",
+      icon: Flame,
+    },
+    {
+      label: "Neto",
+      value: `$${(netProfit || 0).toLocaleString()}`,
+      sub: "Ventas - Gastos",
+      color: "#10b981",
+      glowColor: "rgba(16,185,129,0.2)",
+      icon: ChevronRight,
     },
     {
       label: "Fiado",

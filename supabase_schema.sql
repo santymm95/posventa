@@ -60,3 +60,16 @@ CREATE TABLE IF NOT EXISTS settings (
 
 -- Indexar userid
 CREATE INDEX IF NOT EXISTS idx_settings_userid ON settings(userid);
+
+-- 4. Crear Tabla: expenses (Gastos operativos)
+CREATE TABLE IF NOT EXISTS expenses (
+  id SERIAL PRIMARY KEY,
+  date TIMESTAMP NOT NULL,
+  description TEXT,
+  amount INTEGER NOT NULL, -- monto en centavos
+  createdby INTEGER,
+  createdat TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+  updatedat TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);

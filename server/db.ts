@@ -568,6 +568,133 @@ export async function createSale(payload: {
 }
 
 // ==========================================
+// EXPENSES METHODS
+// ==========================================
+
+export async function getExpensesByDate(date: Date) {
+  if (!supabaseServer) return [];
+  const { start, end } = normalizeDateRange(date, date);
+  try {
+    console.debug('[Supabase] getExpensesByDate start/end:', start.toISOString(), end.toISOString());
+    const { data, error } = await supabaseServer
+      .from('expenses')
+      .select('*')
+      .gte('date', start.toISOString())
+      .lte('date', end.toISOString());
+
+    if (error) {
+      console.error("[Supabase] Failed to get expenses by date:", error);
+      return [];
+    }
+
+    if (!data) {
+      console.warn('[Supabase] getExpensesByDate returned no data (null)');
+      return [];
+    }
+
+    const mapped = data.map((e: any) => ({
+      id: e.id,
+      date: new Date(e.date),
+      description: e.description,
+      amount: e.amount,
+      createdBy: e.closedby || e.createdby || null,
+      createdAt: new Date(e.createdat),
+    }));
+
+    console.debug('[Supabase] getExpensesByDate mapped count:', mapped.length);
+    return mapped;
+  } catch (err) {
+    console.error('[Supabase] Exception in getExpensesByDate:', err);
+    return [];
+  }
+}
+
+export async function getRecentExpenses(limit: number = 20) {
+  if (!supabaseServer) return [];
+  const { data, error } = await supabaseServer
+    .from('expenses')
+    .select('*')
+    .order('date', { ascending: false })
+    .limit(limit);
+
+  if (error || !data) {
+    console.error("[Supabase] Failed to get recent expenses:", error);
+    return [];
+  }
+
+  return data.map((e: any) => ({
+    id: e.id,
+    date: new Date(e.date),
+    description: e.description,
+    amount: e.amount,
+    createdBy: e.closedby || e.createdby || null,
+    createdAt: new Date(e.createdat),
+  }));
+}
+
+export async function getExpensesByDateRange(startDate: Date, endDate: Date) {
+  if (!supabaseServer) return [];
+  const { start, end } = normalizeDateRange(startDate, endDate);
+  try {
+    console.debug('[Supabase] getExpensesByDateRange start/end:', start.toISOString(), end.toISOString());
+    const { data, error } = await supabaseServer
+      .from('expenses')
+      .select('*')
+      .gte('date', start.toISOString())
+      .lte('date', end.toISOString())
+      .order('date', { ascending: true });
+
+    if (error) {
+      console.error("[Supabase] Failed to get expenses by range:", error);
+      return [];
+    }
+
+    if (!data) {
+      console.warn('[Supabase] getExpensesByDateRange returned no data (null)');
+      return [];
+    }
+
+    const mapped = data.map((e: any) => ({
+      id: e.id,
+      date: new Date(e.date),
+      description: e.description,
+      amount: e.amount,
+      createdBy: e.createdby || null,
+      createdAt: new Date(e.createdat),
+    }));
+
+    console.debug('[Supabase] getExpensesByDateRange mapped count:', mapped.length);
+    return mapped;
+  } catch (err) {
+    console.error('[Supabase] Exception in getExpensesByDateRange:', err);
+    return [];
+  }
+}
+
+export async function createExpense(payload: { date: Date; description?: string; amount: number; createdBy?: string | null; }) {
+  if (!supabaseServer) throw new Error("Supabase connection not available");
+
+  const { data, error } = await supabaseServer
+    .from('expenses')
+    .insert({
+      date: payload.date.toISOString(),
+      description: payload.description || "",
+      amount: payload.amount,
+      createdby: payload.createdBy || null,
+      updatedat: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error("[Supabase] Failed to create expense:", error);
+    throw error;
+  }
+
+  return data?.id;
+}
+
+// ==========================================
 // DAILY BALANCE METHODS
 // ==========================================
 
@@ -744,7 +871,7 @@ export async function createCashClosing(payload: {
   actualCash: number;
   difference: number;
   notes?: string;
-  closedBy?: number;
+  closedBy?: string | null;
 }) {
   if (!supabaseServer) throw new Error("Supabase connection not available");
 

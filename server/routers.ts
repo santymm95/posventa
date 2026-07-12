@@ -31,6 +31,7 @@ import {
   createSale,
   createCashClosing
 } from "./db";
+import { getExpensesByDate, getRecentExpenses, getExpensesByDateRange, createExpense } from "./db";
 import { comparePasswordWithCandidates, createAuthToken, hashPassword, isLocalAdminCredential } from "./_core/auth";
 import { sdk } from "./_core/sdk";
 import { printSaleReceipt } from "./_core/printer";
@@ -602,6 +603,9 @@ export const appRouter = router({
         
         const difference = input.actualCash - input.expectedCash;
         
+        const isUuid = (v: any) => typeof v === 'string' && /^[0-9a-fA-F-]{36}$/.test(v);
+        const closedByVal = isUuid(ctx.user?.id) ? ctx.user?.id : null;
+
         const resultId = await createCashClosing({
           date: input.date,
           totalSales,
@@ -612,7 +616,7 @@ export const appRouter = router({
           actualCash: input.actualCash,
           difference,
           notes: input.notes,
-          closedBy: ctx.user?.id,
+          closedBy: closedByVal,
         });
         
         return { success: true, id: resultId };
@@ -633,6 +637,46 @@ export const appRouter = router({
     all: publicProcedure
       .query(async () => {
         return getAllCashClosings();
+      }),
+  }),
+
+  expenses: router({
+    create: protectedProcedure
+      .input(z.object({
+        date: z.date(),
+        description: z.string().optional(),
+        amount: z.number(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ctx.user?.id) throw new Error("User not authenticated");
+        // only pass createdBy if it's a UUID (Supabase auth user), otherwise leave null
+        const isUuid = (v: any) => typeof v === 'string' && /^[0-9a-fA-F-]{36}$/.test(v);
+        const createdBy = isUuid(ctx.user.id) ? ctx.user.id : null;
+
+        const id = await createExpense({
+          date: input.date,
+          description: input.description,
+          amount: Math.round(input.amount * 100),
+          createdBy,
+        });
+        return { success: true, id };
+      }),
+
+    byDate: publicProcedure
+      .input(z.object({ date: z.date() }))
+      .query(async ({ input }) => {
+        return getExpensesByDate(input.date);
+      }),
+
+    recent: publicProcedure
+      .input(z.object({ limit: z.number().default(20) }))
+      .query(async ({ input }) => {
+        return getRecentExpenses(input.limit);
+      }),
+    byRange: publicProcedure
+      .input(z.object({ startDate: z.date(), endDate: z.date() }))
+      .query(async ({ input }) => {
+        return getExpensesByDateRange(input.startDate, input.endDate);
       }),
   }),
 });

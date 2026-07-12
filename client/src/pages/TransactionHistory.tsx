@@ -51,6 +51,10 @@ export default function TransactionHistory() {
     date: parseDateInput(selectedDate),
   });
 
+  const { data: expensesData } = trpc.expenses.byDate.useQuery({
+    date: parseDateInput(selectedDate),
+  });
+
   const { data: recentClosings } = trpc.cashClosings.recent.useQuery({
     limit: 20,
   });
@@ -65,6 +69,7 @@ export default function TransactionHistory() {
   const cashSales = salesData?.filter((s: { paymentMethod: string }) => s.paymentMethod === "efectivo").reduce((sum: number, s: { totalPrice: number }) => sum + s.totalPrice, 0) || 0;
   const transferSales = salesData?.filter((s: { paymentMethod: string }) => s.paymentMethod === "transferencia").reduce((sum: number, s: { totalPrice: number }) => sum + s.totalPrice, 0) || 0;
   const creditSales = salesData?.filter((s: { paymentMethod: string }) => s.paymentMethod === "fiado").reduce((sum: number, s: { totalPrice: number }) => sum + s.totalPrice, 0) || 0;
+  const totalExpenses = expensesData?.reduce((sum: number, e: { amount: number }) => sum + e.amount, 0) || 0;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--background)" }}>
@@ -203,6 +208,10 @@ export default function TransactionHistory() {
                   <p className="text-xs" style={{ color: "oklch(0.50 0.01 260)" }}>Fiados</p>
                   <p className="text-lg font-bold" style={{ color: "#fb923c" }}>{formatCurrency(creditSales)}</p>
                 </div>
+                <div className="rounded-lg p-3 text-center" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.12)" }}>
+                  <p className="text-xs" style={{ color: "oklch(0.50 0.01 260)" }}>Gastos</p>
+                  <p className="text-lg font-bold" style={{ color: "#ef4444" }}>{formatCurrency(totalExpenses)}</p>
+                </div>
               </div>
 
               {/* Transactions List */}
@@ -270,6 +279,28 @@ export default function TransactionHistory() {
                     <p>No hay transacciones para esta fecha</p>
                   </div>
                 )}
+
+                {/* Expenses list */}
+                <div className="mt-6">
+                  <h4 className="text-sm font-semibold mb-2" style={{ color: "var(--foreground)" }}>Gastos ({expensesData?.length || 0})</h4>
+                  {expensesData && expensesData.length > 0 ? (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                      {expensesData.map((e: any) => (
+                        <div key={e.id} className="flex justify-between items-center p-3 rounded-lg" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)" }}>
+                          <div>
+                            <p className="font-medium text-sm" style={{ color: "var(--foreground)" }}>{e.description || 'Gasto'}</p>
+                            <p className="text-xs" style={{ color: "oklch(0.55 0.01 260)" }}>{formatDateTime(e.date)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-sm" style={{ color: "#ef4444" }}>{formatCurrency(e.amount)}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs" style={{ color: "oklch(0.45 0.01 260)" }}>No hay gastos registrados</p>
+                  )}
+                </div>
               </div>
             </div>
           </div>

@@ -26,6 +26,8 @@ interface DailySummary {
   transferenciaSales: number;
   fiadoSales: number;
   transactionCount: number;
+  expenses?: number;
+  net?: number;
 }
 
 const parseDateInput = (value: string) => {
@@ -47,6 +49,7 @@ export default function Reports() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [filteredSales, setFilteredSales] = useState<Sale[]>([]);
   const [dailySummary, setDailySummary] = useState<DailySummary[]>([]);
+  const [totalExpenses, setTotalExpenses] = useState(0);
 
   // tRPC queries
   const { data: user } = trpc.auth.me.useQuery();
@@ -61,6 +64,11 @@ export default function Reports() {
     endDate: parseDateInput(endDate || todayString),
   });
 
+  const { data: expensesRange, refetch: refetchExpenses } = trpc.expenses.byRange.useQuery({
+    startDate: parseDateInput(startDate || sevenDaysAgoString),
+    endDate: parseDateInput(endDate || todayString),
+  });
+
   useEffect(() => {
     // Solo redirigir si user está definido pero no es admin
     if (user && user.role !== "admin") {
@@ -69,24 +77,37 @@ export default function Reports() {
       return;
     }
 
-    // Cargar ventas desde BD
-    if (salesData && Array.isArray(salesData)) {
-      const parsedSales = salesData.map((sale: any) => ({
-        id: sale.id || 0,
-        productId: sale.productId,
-        productName: sale.productName || "Producto",
-        quantity: sale.quantity,
-        unitPrice: sale.unitPrice / 100, // Convertir de centavos a pesos
-        totalPrice: sale.totalPrice / 100, // Convertir de centavos a pesos
-        paymentMethod: sale.paymentMethod,
-        timestamp: new Date(sale.date || sale.createdAt),
-      }));
-      setSales(parsedSales);
-      setFilteredSales(parsedSales);
+    // Parse sales and expenses regardless of presence of one or the other
+    const parsedSales = (salesData && Array.isArray(salesData)) ? salesData.map((sale: any) => ({
+      id: sale.id || 0,
+      productId: sale.productId,
+      productName: sale.productName || "Producto",
+      quantity: sale.quantity,
+      unitPrice: sale.unitPrice / 100, // Convertir de centavos a pesos
+      totalPrice: sale.totalPrice / 100, // Convertir de centavos a pesos
+      paymentMethod: sale.paymentMethod,
+      timestamp: new Date(sale.date || sale.createdAt),
+    })) : [];
 
-      // Generar resumen diario
-      generateDailySummary(parsedSales);
-    }
+    const parsedExpenses = (expensesRange && Array.isArray(expensesRange)) ? expensesRange.map((e: any) => ({
+      id: e.id,
+      date: new Date(e.date),
+      amount: e.amount / 100,
+      description: e.description,
+    })) : [];
+
+    // Debug logs to inspect expenses payload
+    console.log('[Reports] expensesRange:', expensesRange);
+    console.log('[Reports] parsedExpenses:', parsedExpenses);
+
+    setSales(parsedSales);
+    setFilteredSales(parsedSales);
+    // Generar resumen diario combinando ventas y gastos
+    generateDailySummary(parsedSales, parsedExpenses);
+
+    // Total gastos del periodo
+    const expensesTotal = parsedExpenses.reduce((s: number, x: any) => s + (x.amount || 0), 0);
+    setTotalExpenses(expensesTotal);
 
     // Establecer fechas por defecto (últimos 7 días)
     if (!startDate) {
@@ -95,10 +116,10 @@ export default function Reports() {
     if (!endDate) {
       setEndDate(todayString);
     }
-  }, [user, salesData, setLocation]);
+  }, [user, salesData, expensesRange, setLocation]);
 
-  const generateDailySummary = (salesList: Sale[]) => {
-    const summary: Record<string, DailySummary> = {};
+  const generateDailySummary = (salesList: Sale[], expensesList: any[] = []) => {
+    const summary: Record<string, DailySummary & { expenses?: number }> = {};
 
     salesList.forEach((sale) => {
       const date = new Date(sale.timestamp).toISOString().split("T")[0];
@@ -110,7 +131,8 @@ export default function Reports() {
           transferenciaSales: 0,
           fiadoSales: 0,
           transactionCount: 0,
-        };
+          expenses: 0,
+        } as any;
       }
 
       summary[date].totalSales += sale.totalPrice;
@@ -125,8 +147,33 @@ export default function Reports() {
       }
     });
 
-    const sorted = Object.values(summary).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    setDailySummary(sorted);
+    expensesList.forEach((exp) => {
+      const date = new Date(exp.date).toISOString().split("T")[0];
+      if (!summary[date]) {
+        summary[date] = {
+          date,
+          totalSales: 0,
+          efectivoSales: 0,
+          transferenciaSales: 0,
+          fiadoSales: 0,
+          transactionCount: 0,
+          expenses: 0,
+        } as any;
+      }
+      summary[date].expenses = (summary[date].expenses || 0) + (exp.amount || 0);
+    });
+
+    const sorted = Object.values(summary).map((s: any) => ({
+      date: s.date,
+      totalSales: s.totalSales,
+      efectivoSales: s.efectivoSales,
+      transferenciaSales: s.transferenciaSales,
+      fiadoSales: s.fiadoSales,
+      transactionCount: s.transactionCount,
+      expenses: s.expenses || 0,
+      net: (s.totalSales || 0) - (s.expenses || 0),
+    })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    setDailySummary(sorted as DailySummary[]);
   };
 
   const handleFilter = () => {
@@ -134,6 +181,7 @@ export default function Reports() {
       return;
     }
     refetchSales();
+    refetchExpenses();
   };
 
   // Calcular totales
@@ -142,6 +190,7 @@ export default function Reports() {
   const totalTransferencia = filteredSales.reduce((sum, sale) => sum + (sale.paymentMethod === "transferencia" ? sale.totalPrice : 0), 0);
   const totalFiado = filteredSales.reduce((sum, sale) => sum + (sale.paymentMethod === "fiado" ? sale.totalPrice : 0), 0);
   const totalTransactions = filteredSales.length;
+  const netTotal = totalSales - totalExpenses;
 
   // Datos para gráficos
   const paymentMethodData = [
@@ -280,6 +329,8 @@ export default function Reports() {
             { label: "Efectivo", value: `$${totalEfectivo.toLocaleString()}`, color: "#22c55e", glow: "rgba(34,197,94,0.18)" },
             { label: "Transferencia", value: `$${totalTransferencia.toLocaleString()}`, color: "#38bdf8", glow: "rgba(56,189,248,0.18)" },
             { label: "Fiado", value: `$${totalFiado.toLocaleString()}`, color: "#fb923c", glow: "rgba(251,146,60,0.18)" },
+            { label: "Gastos", value: `$${totalExpenses.toLocaleString()}`, color: "#ef4444", glow: "rgba(239,68,68,0.18)" },
+            { label: "Neto", value: `$${netTotal.toLocaleString()}`, color: "#10b981", glow: "rgba(16,185,129,0.18)" },
             { label: "Transacciones", value: String(totalTransactions), color: "#a78bfa", glow: "rgba(167,139,250,0.18)" },
           ].map((stat, i) => (
             <div key={stat.label} className="stat-card animate-fade-in" style={{ animationDelay: `${i*70}ms`, borderColor: `${stat.color}22` }}>
@@ -356,6 +407,8 @@ export default function Reports() {
                 <Line type="monotone" dataKey="efectivoSales" stroke="#22c55e" strokeWidth={2} name="Efectivo" dot={{ fill: "#22c55e", r: 3 }} />
                 <Line type="monotone" dataKey="transferenciaSales" stroke="#38bdf8" strokeWidth={2} name="Transferencia" dot={{ fill: "#38bdf8", r: 3 }} />
                 <Line type="monotone" dataKey="fiadoSales" stroke="#fb923c" strokeWidth={2} name="Fiado" dot={{ fill: "#fb923c", r: 3 }} />
+                <Line type="monotone" dataKey="expenses" stroke="#ef4444" strokeWidth={2} name="Gastos" dot={{ fill: "#ef4444", r: 3 }} />
+                <Line type="monotone" dataKey="net" stroke="#10b981" strokeWidth={2} name="Neto" dot={{ fill: "#10b981", r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           ) : (
