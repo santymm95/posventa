@@ -25,7 +25,7 @@ const loggerFetch = async (input, init) => {
 const client = createTRPCProxyClient({
   links: [
     httpBatchLink({
-      url: 'http://localhost:3000/api/trpc',
+      url: 'http://localhost:3001/api/trpc',
       fetch: loggerFetch,
     }),
   ],
