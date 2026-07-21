@@ -4,7 +4,6 @@ import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { LogIn, Eye, EyeOff } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { supabase } from "../supabaseClient";
 import { useCallback } from "react";
 
 export default function Login() {
@@ -33,11 +32,6 @@ export default function Login() {
     e.preventDefault();
     if (!email || !password) {
       toast.error("Por favor completa email y contraseña");
-      return;
-    }
-
-    if (!supabase) {
-      toast.error("Supabase no está configurado aún. Completa VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY en .env.");
       return;
     }
 
