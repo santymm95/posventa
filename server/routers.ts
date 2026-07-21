@@ -35,7 +35,6 @@ import { getExpensesByDate, getRecentExpenses, getExpensesByDateRange, createExp
 import { comparePasswordWithCandidates, createAuthToken, hashPassword, isLocalAdminCredential } from "./_core/auth";
 import { sdk } from "./_core/sdk";
 import { printSaleReceipt } from "./_core/printer";
-import { upsertSupabaseProduct, hasSupabaseConfig } from "./supabase";
 
 const ADMIN_EMAIL = "admin@gmail.com";
 const ADMIN_PASSWORD = "admin2026*";
@@ -91,46 +90,6 @@ export const appRouter = router({
           const foundUser = await getUserByEmail(normalizedEmail);
 
           if (!foundUser) {
-            // Try Supabase Auth if configured
-            if (hasSupabaseConfig()) {
-              const { supabaseServer } = await import('./supabase');
-              if (supabaseServer) {
-                try {
-                  const resp = await supabaseServer.auth.signInWithPassword({ email: normalizedEmail, password: normalizedPassword });
-                  if (resp.error || !resp.data?.user) {
-                    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Email o contraseña incorrectos' });
-                  }
-
-                  const sbUser = resp.data.user;
-                  const sessionToken = await sdk.createSessionToken(sbUser.id, { name: sbUser.user_metadata?.full_name || sbUser.email });
-
-                  try {
-                    const cookieOptions = getSessionCookieOptions(ctx.req);
-                    console.log('[Auth] Setting session cookie for supabase user', { openId: sbUser.id, cookieOptions });
-                    ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions });
-                  } catch {}
-
-                  return {
-                    token: sessionToken,
-                    user: {
-                      id: sbUser.id,
-                      openId: sbUser.id,
-                      name: sbUser.user_metadata?.full_name || sbUser.email,
-                      email: sbUser.email,
-                      password: null,
-                      loginMethod: 'supabase',
-                      role: 'user',
-                      createdAt: new Date(),
-                      updatedAt: new Date(),
-                      lastSignedIn: new Date(),
-                    },
-                  };
-                } catch (e) {
-                  throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Email o contraseña incorrectos' });
-                }
-              }
-            }
-
             throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Email o contraseña incorrectos' });
           }
 
@@ -314,19 +273,6 @@ export const appRouter = router({
         }
         
         const createdProduct = await createProduct(input.name, Math.round(input.price * 100), imagePath);
-
-        if (hasSupabaseConfig()) {
-          await upsertSupabaseProduct({
-            id: createdProduct?.id,
-            name: input.name,
-            price: Math.round(input.price * 100),
-            image: imagePath,
-            category: "",
-            active: 1,
-            parentProductId: null,
-          });
-        }
-
         return createdProduct;
       }),
     update: protectedProcedure
@@ -374,19 +320,6 @@ export const appRouter = router({
           price: input.price !== undefined ? Math.round(input.price * 100) : undefined,
           image: imagePath,
         });
-
-        if (hasSupabaseConfig()) {
-          const currentProduct = await getProductById(input.id);
-          await upsertSupabaseProduct({
-            id: input.id,
-            name: input.name ?? currentProduct?.name ?? "Producto",
-            price: input.price !== undefined ? Math.round(input.price * 100) : currentProduct?.price ?? 0,
-            image: imagePath ?? currentProduct?.image ?? "",
-            category: currentProduct?.category ?? "",
-            active: currentProduct?.active ?? 1,
-            parentProductId: currentProduct?.parentProductId ?? null,
-          });
-        }
 
         return updatedProduct;
       }),
