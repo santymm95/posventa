@@ -1,4 +1,4 @@
-import { supabaseServer, hasSupabaseConfig } from './supabase';
+import { sql } from './db/neon';
 import { InsertUser } from "../drizzle/schema";
 
 // Helper functions for dates and calculations
@@ -43,9 +43,8 @@ export function getInventoryProductIds(productId: number, parentProductId?: numb
   return [productId, parentProductId];
 }
 
-// Mock Drizzle getDb to return null since we're using Supabase directly
 export async function getDb() {
-  return null;
+  return sql;
 }
 
 // ==========================================
@@ -53,16 +52,16 @@ export async function getDb() {
 // ==========================================
 
 export async function getUserByEmail(email: string) {
-  if (!supabaseServer) return undefined;
+  if (!sql) return undefined;
   const normalized = email.trim().toLowerCase();
-  const { data, error } = await supabaseServer
-    .from('users')
-    .select('*')
-    .eq('email', normalized)
-    .limit(1)
-    .maybeSingle();
+  const rows = await sql`
+    SELECT * FROM users
+    WHERE LOWER(email) = ${normalized}
+    LIMIT 1
+  `;
 
-  if (error || !data) return undefined;
+  if (!rows || rows.length === 0) return undefined;
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -79,15 +78,15 @@ export async function getUserByEmail(email: string) {
 }
 
 export async function getUserByOpenId(openId: string) {
-  if (!supabaseServer) return undefined;
-  const { data, error } = await supabaseServer
-    .from('users')
-    .select('*')
-    .eq('openid', openId)
-    .limit(1)
-    .maybeSingle();
+  if (!sql) return undefined;
+  const rows = await sql`
+    SELECT * FROM users
+    WHERE openid = ${openId}
+    LIMIT 1
+  `;
 
-  if (error || !data) return undefined;
+  if (!rows || rows.length === 0) return undefined;
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -104,15 +103,15 @@ export async function getUserByOpenId(openId: string) {
 }
 
 export async function getUserById(id: number) {
-  if (!supabaseServer) return undefined;
-  const { data, error } = await supabaseServer
-    .from('users')
-    .select('*')
-    .eq('id', id)
-    .limit(1)
-    .maybeSingle();
+  if (!sql) return undefined;
+  const rows = await sql`
+    SELECT * FROM users
+    WHERE id = ${id}
+    LIMIT 1
+  `;
 
-  if (error || !data) return undefined;
+  if (!rows || rows.length === 0) return undefined;
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -129,15 +128,13 @@ export async function getUserById(id: number) {
 }
 
 export async function listUsers() {
-  if (!supabaseServer) return [];
-  const { data, error } = await supabaseServer
-    .from('users')
-    .select('id, name, email, role, createdat')
-    .order('createdat', { ascending: true });
+  if (!sql) return [];
+  const rows = await sql`
+    SELECT id, name, email, role, createdat FROM users
+    ORDER BY createdat ASC
+  `;
 
-  if (error || !data) return [];
-
-  return data.map((u: any) => ({
+  return rows.map((u: any) => ({
     id: u.id,
     name: u.name,
     email: u.email,
@@ -154,28 +151,20 @@ export async function createUser(payload: {
   loginMethod: string;
   role: string;
 }) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
+  if (!sql) throw new Error("Neon DB connection not available");
 
-  const { data, error } = await supabaseServer
-    .from('users')
-    .insert({
-      openid: payload.openId,
-      email: payload.email.trim().toLowerCase(),
-      password: payload.password || null,
-      name: payload.name || payload.email,
-      loginmethod: payload.loginMethod,
-      role: payload.role,
-      lastsignedin: new Date().toISOString(),
-      updatedat: new Date().toISOString()
-    })
-    .select('*')
-    .single();
+  const normalizedEmail = payload.email.trim().toLowerCase();
+  const password = payload.password || null;
+  const name = payload.name || payload.email;
+  const now = new Date().toISOString();
 
-  if (error) {
-    console.error("[Supabase] Failed to create user:", error);
-    throw error;
-  }
+  const rows = await sql`
+    INSERT INTO users (openid, email, password, name, loginmethod, role, lastsignedin, updatedat)
+    VALUES (${payload.openId}, ${normalizedEmail}, ${password}, ${name}, ${payload.loginMethod}, ${payload.role}, ${now}, ${now})
+    RETURNING *
+  `;
 
+  const data = rows[0];
   return {
     id: data.id,
     openId: data.openid,
@@ -190,40 +179,27 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");
   }
-  if (!supabaseServer) return;
+  if (!sql) return;
 
-  const insertObj: any = {
-    openid: user.openId,
-    updatedat: new Date().toISOString()
-  };
+  const now = new Date().toISOString();
+  const email = user.email ? user.email.trim().toLowerCase() : null;
 
-  if (user.name !== undefined) insertObj.name = user.name;
-  if (user.email !== undefined) insertObj.email = user.email?.trim().toLowerCase();
-  if (user.loginMethod !== undefined) insertObj.loginmethod = user.loginMethod;
-  if (user.role !== undefined) insertObj.role = user.role;
-  if (user.lastSignedIn !== undefined) insertObj.lastsignedin = user.lastSignedIn.toISOString();
-
-  const { error } = await supabaseServer
-    .from('users')
-    .upsert(insertObj, { onConflict: 'openid' });
-
-  if (error) {
-    console.error("[Supabase] Failed to upsert user:", error);
-    throw error;
-  }
+  await sql`
+    INSERT INTO users (openid, email, name, loginmethod, role, lastsignedin, updatedat)
+    VALUES (${user.openId}, ${email}, ${user.name || null}, ${user.loginMethod || 'local'}, ${user.role || 'user'}, ${now}, ${now})
+    ON CONFLICT (openid) DO UPDATE SET
+      email = EXCLUDED.email,
+      name = EXCLUDED.name,
+      loginmethod = EXCLUDED.loginmethod,
+      role = EXCLUDED.role,
+      lastsignedin = EXCLUDED.lastsignedin,
+      updatedat = EXCLUDED.updatedat
+  `;
 }
 
 export async function deleteUser(id: number) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
-  const { error } = await supabaseServer
-    .from('users')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error("[Supabase] Failed to delete user:", error);
-    throw error;
-  }
+  if (!sql) throw new Error("Neon DB connection not available");
+  await sql`DELETE FROM users WHERE id = ${id}`;
 }
 
 // ==========================================
@@ -231,19 +207,14 @@ export async function deleteUser(id: number) {
 // ==========================================
 
 export async function getAllProducts() {
-  if (!supabaseServer) return [];
-  const { data, error } = await supabaseServer
-    .from('products')
-    .select('*')
-    .eq('active', 1)
-    .order('createdat', { ascending: false });
+  if (!sql) return [];
+  const rows = await sql`
+    SELECT * FROM products
+    WHERE active = 1
+    ORDER BY createdat DESC
+  `;
 
-  if (error || !data) {
-    console.error('[Supabase] Failed to fetch products:', error);
-    return [];
-  }
-
-  return data.map((p: any) => ({
+  return rows.map((p: any) => ({
     id: Number(p.id),
     name: p.name,
     description: p.description ?? null,
@@ -258,15 +229,15 @@ export async function getAllProducts() {
 }
 
 export async function getProductById(id: number) {
-  if (!supabaseServer) return undefined;
-  const { data, error } = await supabaseServer
-    .from('products')
-    .select('*')
-    .eq('id', id)
-    .limit(1)
-    .maybeSingle();
+  if (!sql) return undefined;
+  const rows = await sql`
+    SELECT * FROM products
+    WHERE id = ${id}
+    LIMIT 1
+  `;
 
-  if (error || !data) return undefined;
+  if (!rows || rows.length === 0) return undefined;
+  const data = rows[0];
 
   return {
     id: Number(data.id),
@@ -283,27 +254,16 @@ export async function getProductById(id: number) {
 }
 
 export async function createProduct(name: string, price: number, image: string = "", parentProductId?: number) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
+  if (!sql) throw new Error("Neon DB connection not available");
 
-  const { data, error } = await supabaseServer
-    .from("products")
-    .insert({
-      name,
-      description: "",
-      price,
-      image: image || "",
-      category: "General",
-      parentproductid: parentProductId ?? null,
-      active: 1,
-      updatedat: new Date().toISOString()
-    })
-    .select("*")
-    .single();
+  const now = new Date().toISOString();
+  const rows = await sql`
+    INSERT INTO products (name, description, price, image, category, parentproductid, active, updatedat)
+    VALUES (${name}, '', ${price}, ${image || ''}, 'General', ${parentProductId ?? null}, 1, ${now})
+    RETURNING *
+  `;
 
-  if (error) {
-    console.error("[Supabase] Failed to create product:", error);
-    throw error;
-  }
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -320,40 +280,28 @@ export async function createProduct(name: string, price: number, image: string =
 }
 
 export async function updateProduct(id: number, data: { name?: string; price?: number; image?: string | null }) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
+  if (!sql) throw new Error("Neon DB connection not available");
 
-  const updateObj: any = {
-    updatedat: new Date().toISOString()
-  };
-  if (data.name !== undefined) updateObj.name = data.name;
-  if (data.price !== undefined) updateObj.price = data.price;
-  if (data.image !== undefined) updateObj.image = data.image;
+  const existing = await getProductById(id);
+  if (!existing) throw new Error("Product not found");
 
-  const { error } = await supabaseServer
-    .from('products')
-    .update(updateObj)
-    .eq('id', id);
+  const newName = data.name !== undefined ? data.name : existing.name;
+  const newPrice = data.price !== undefined ? data.price : existing.price;
+  const newImage = data.image !== undefined ? data.image : existing.image;
+  const now = new Date().toISOString();
 
-  if (error) {
-    console.error("[Supabase] Failed to update product:", error);
-    throw error;
-  }
+  await sql`
+    UPDATE products
+    SET name = ${newName}, price = ${newPrice}, image = ${newImage}, updatedat = ${now}
+    WHERE id = ${id}
+  `;
 
   return getProductById(id);
 }
 
 export async function deleteProduct(id: number) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
-  const { error } = await supabaseServer
-    .from('products')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error("[Supabase] Failed to delete product:", error);
-    throw error;
-  }
-
+  if (!sql) throw new Error("Neon DB connection not available");
+  await sql`DELETE FROM products WHERE id = ${id}`;
   return { success: true };
 }
 
@@ -362,24 +310,18 @@ export async function deleteProduct(id: number) {
 // ==========================================
 
 export async function getTodayInventory() {
-  if (!supabaseServer) return [];
+  if (!sql) return [];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
 
-  const { data, error } = await supabaseServer
-    .from('inventory')
-    .select('*')
-    .gte('date', today.toISOString())
-    .lt('date', tomorrow.toISOString());
+  const rows = await sql`
+    SELECT * FROM inventory
+    WHERE date >= ${today.toISOString()} AND date < ${tomorrow.toISOString()}
+  `;
 
-  if (error || !data) {
-    console.error("[Supabase] Failed to get today inventory:", error);
-    return [];
-  }
-
-  return data.map((i: any) => ({
+  return rows.map((i: any) => ({
     id: i.id,
     productId: i.productid,
     date: new Date(i.date),
@@ -394,22 +336,22 @@ export async function getTodayInventory() {
 }
 
 export async function getInventoryByProductAndDate(productId: number, date: Date) {
-  if (!supabaseServer) return undefined;
+  if (!sql) return undefined;
   const dateStart = new Date(date);
   dateStart.setHours(0, 0, 0, 0);
   const dateEnd = new Date(dateStart);
   dateEnd.setDate(dateEnd.getDate() + 1);
 
-  const { data, error } = await supabaseServer
-    .from('inventory')
-    .select('*')
-    .eq('productid', productId)
-    .gte('date', dateStart.toISOString())
-    .lt('date', dateEnd.toISOString())
-    .limit(1)
-    .maybeSingle();
+  const rows = await sql`
+    SELECT * FROM inventory
+    WHERE productid = ${productId}
+      AND date >= ${dateStart.toISOString()}
+      AND date < ${dateEnd.toISOString()}
+    LIMIT 1
+  `;
 
-  if (error || !data) return undefined;
+  if (!rows || rows.length === 0) return undefined;
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -426,50 +368,31 @@ export async function getInventoryByProductAndDate(productId: number, date: Date
 }
 
 export async function upsertInventory(productId: number, quantity: number, previousDayQuantity: number, notes?: string) {
-  if (!supabaseServer) return undefined;
+  if (!sql) return undefined;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   const existing = await getInventoryByProductAndDate(productId, today);
+  const now = new Date().toISOString();
 
   if (existing) {
     const newQuantity = (existing.quantity || 0) + quantity;
-    const { error } = await supabaseServer
-      .from('inventory')
-      .update({
-        quantity: newQuantity,
-        previousdayquantity: previousDayQuantity !== 0 ? previousDayQuantity : existing.previousDayQuantity,
-        notes,
-        updatedat: new Date().toISOString(),
-      })
-      .eq('id', existing.id);
+    const prevQty = previousDayQuantity !== 0 ? previousDayQuantity : existing.previousDayQuantity;
+    const noteVal = notes ?? existing.notes ?? "";
 
-    if (error) {
-      console.error("[Supabase] Failed to update inventory:", error);
-      return undefined;
-    }
+    await sql`
+      UPDATE inventory
+      SET quantity = ${newQuantity}, previousdayquantity = ${prevQty}, notes = ${noteVal}, updatedat = ${now}
+      WHERE id = ${existing.id}
+    `;
     return existing.id;
   } else {
-    const { data, error } = await supabaseServer
-      .from('inventory')
-      .insert({
-        productid: productId,
-        date: today.toISOString(),
-        quantity,
-        previousdayquantity: previousDayQuantity,
-        sold: 0,
-        remaining: quantity,
-        notes,
-        updatedat: new Date().toISOString()
-      })
-      .select('id')
-      .single();
-
-    if (error) {
-      console.error("[Supabase] Failed to insert inventory:", error);
-      return undefined;
-    }
-    return data?.id;
+    const rows = await sql`
+      INSERT INTO inventory (productid, date, quantity, previousdayquantity, sold, remaining, notes, updatedat)
+      VALUES (${productId}, ${today.toISOString()}, ${quantity}, ${previousDayQuantity}, 0, ${quantity}, ${notes ?? ""}, ${now})
+      RETURNING id
+    `;
+    return rows[0]?.id;
   }
 }
 
@@ -478,21 +401,15 @@ export async function upsertInventory(productId: number, quantity: number, previ
 // ==========================================
 
 export async function getSalesByDate(date: Date) {
-  if (!supabaseServer) return [];
+  if (!sql) return [];
   const { start, end } = normalizeDateRange(date, date);
 
-  const { data, error } = await supabaseServer
-    .from('sales')
-    .select('*')
-    .gte('date', start.toISOString())
-    .lte('date', end.toISOString());
+  const rows = await sql`
+    SELECT * FROM sales
+    WHERE date >= ${start.toISOString()} AND date <= ${end.toISOString()}
+  `;
 
-  if (error || !data) {
-    console.error("[Supabase] Failed to get sales by date:", error);
-    return [];
-  }
-
-  return data.map((s: any) => ({
+  return rows.map((s: any) => ({
     id: s.id,
     productId: s.productid,
     quantity: s.quantity,
@@ -507,21 +424,15 @@ export async function getSalesByDate(date: Date) {
 }
 
 export async function getSalesByDateRange(startDate: Date, endDate: Date) {
-  if (!supabaseServer) return [];
+  if (!sql) return [];
   const { start, end } = normalizeDateRange(startDate, endDate);
 
-  const { data, error } = await supabaseServer
-    .from('sales')
-    .select('*')
-    .gte('date', start.toISOString())
-    .lte('date', end.toISOString());
+  const rows = await sql`
+    SELECT * FROM sales
+    WHERE date >= ${start.toISOString()} AND date <= ${end.toISOString()}
+  `;
 
-  if (error || !data) {
-    console.error("[Supabase] Failed to get sales by range:", error);
-    return [];
-  }
-
-  return data.map((s: any) => ({
+  return rows.map((s: any) => ({
     id: s.id,
     productId: s.productid,
     quantity: s.quantity,
@@ -543,28 +454,16 @@ export async function createSale(payload: {
   paymentMethod: "efectivo" | "transferencia" | "fiado";
   date: Date;
 }) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
+  if (!sql) throw new Error("Neon DB connection not available");
 
-  const { data, error } = await supabaseServer
-    .from('sales')
-    .insert({
-      productid: payload.productId,
-      quantity: payload.quantity,
-      unitprice: payload.unitPrice,
-      totalprice: payload.totalPrice,
-      paymentmethod: payload.paymentMethod,
-      date: payload.date.toISOString(),
-      updatedat: new Date().toISOString()
-    })
-    .select('id')
-    .single();
+  const now = new Date().toISOString();
+  const rows = await sql`
+    INSERT INTO sales (productid, quantity, unitprice, totalprice, paymentmethod, date, updatedat)
+    VALUES (${payload.productId}, ${payload.quantity}, ${payload.unitPrice}, ${payload.totalPrice}, ${payload.paymentMethod}, ${payload.date.toISOString()}, ${now})
+    RETURNING id
+  `;
 
-  if (error) {
-    console.error("[Supabase] Failed to create sale:", error);
-    throw error;
-  }
-
-  return data?.id;
+  return rows[0]?.id;
 }
 
 // ==========================================
@@ -572,89 +471,15 @@ export async function createSale(payload: {
 // ==========================================
 
 export async function getExpensesByDate(date: Date) {
-  if (!supabaseServer) return [];
+  if (!sql) return [];
   const { start, end } = normalizeDateRange(date, date);
   try {
-    console.debug('[Supabase] getExpensesByDate start/end:', start.toISOString(), end.toISOString());
-    const { data, error } = await supabaseServer
-      .from('expenses')
-      .select('*')
-      .gte('date', start.toISOString())
-      .lte('date', end.toISOString());
+    const rows = await sql`
+      SELECT * FROM expenses
+      WHERE date >= ${start.toISOString()} AND date <= ${end.toISOString()}
+    `;
 
-    if (error) {
-      console.error("[Supabase] Failed to get expenses by date:", error);
-      return [];
-    }
-
-    if (!data) {
-      console.warn('[Supabase] getExpensesByDate returned no data (null)');
-      return [];
-    }
-
-    const mapped = data.map((e: any) => ({
-      id: e.id,
-      date: new Date(e.date),
-      description: e.description,
-      amount: e.amount,
-      createdBy: e.closedby || e.createdby || null,
-      createdAt: new Date(e.createdat),
-    }));
-
-    console.debug('[Supabase] getExpensesByDate mapped count:', mapped.length);
-    return mapped;
-  } catch (err) {
-    console.error('[Supabase] Exception in getExpensesByDate:', err);
-    return [];
-  }
-}
-
-export async function getRecentExpenses(limit: number = 20) {
-  if (!supabaseServer) return [];
-  const { data, error } = await supabaseServer
-    .from('expenses')
-    .select('*')
-    .order('date', { ascending: false })
-    .limit(limit);
-
-  if (error || !data) {
-    console.error("[Supabase] Failed to get recent expenses:", error);
-    return [];
-  }
-
-  return data.map((e: any) => ({
-    id: e.id,
-    date: new Date(e.date),
-    description: e.description,
-    amount: e.amount,
-    createdBy: e.closedby || e.createdby || null,
-    createdAt: new Date(e.createdat),
-  }));
-}
-
-export async function getExpensesByDateRange(startDate: Date, endDate: Date) {
-  if (!supabaseServer) return [];
-  const { start, end } = normalizeDateRange(startDate, endDate);
-  try {
-    console.debug('[Supabase] getExpensesByDateRange start/end:', start.toISOString(), end.toISOString());
-    const { data, error } = await supabaseServer
-      .from('expenses')
-      .select('*')
-      .gte('date', start.toISOString())
-      .lte('date', end.toISOString())
-      .order('date', { ascending: true });
-
-    if (error) {
-      console.error("[Supabase] Failed to get expenses by range:", error);
-      return [];
-    }
-
-    if (!data) {
-      console.warn('[Supabase] getExpensesByDateRange returned no data (null)');
-      return [];
-    }
-
-    const mapped = data.map((e: any) => ({
+    return rows.map((e: any) => ({
       id: e.id,
       date: new Date(e.date),
       description: e.description,
@@ -662,36 +487,65 @@ export async function getExpensesByDateRange(startDate: Date, endDate: Date) {
       createdBy: e.createdby || null,
       createdAt: new Date(e.createdat),
     }));
-
-    console.debug('[Supabase] getExpensesByDateRange mapped count:', mapped.length);
-    return mapped;
   } catch (err) {
-    console.error('[Supabase] Exception in getExpensesByDateRange:', err);
+    console.error('[Neon] Exception in getExpensesByDate:', err);
+    return [];
+  }
+}
+
+export async function getRecentExpenses(limit: number = 20) {
+  if (!sql) return [];
+  const rows = await sql`
+    SELECT * FROM expenses
+    ORDER BY date DESC
+    LIMIT ${limit}
+  `;
+
+  return rows.map((e: any) => ({
+    id: e.id,
+    date: new Date(e.date),
+    description: e.description,
+    amount: e.amount,
+    createdBy: e.createdby || null,
+    createdAt: new Date(e.createdat),
+  }));
+}
+
+export async function getExpensesByDateRange(startDate: Date, endDate: Date) {
+  if (!sql) return [];
+  const { start, end } = normalizeDateRange(startDate, endDate);
+  try {
+    const rows = await sql`
+      SELECT * FROM expenses
+      WHERE date >= ${start.toISOString()} AND date <= ${end.toISOString()}
+      ORDER BY date ASC
+    `;
+
+    return rows.map((e: any) => ({
+      id: e.id,
+      date: new Date(e.date),
+      description: e.description,
+      amount: e.amount,
+      createdBy: e.createdby || null,
+      createdAt: new Date(e.createdat),
+    }));
+  } catch (err) {
+    console.error('[Neon] Exception in getExpensesByDateRange:', err);
     return [];
   }
 }
 
 export async function createExpense(payload: { date: Date; description?: string; amount: number; createdBy?: string | null; }) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
+  if (!sql) throw new Error("Neon DB connection not available");
 
-  const { data, error } = await supabaseServer
-    .from('expenses')
-    .insert({
-      date: payload.date.toISOString(),
-      description: payload.description || "",
-      amount: payload.amount,
-      createdby: payload.createdBy || null,
-      updatedat: new Date().toISOString(),
-    })
-    .select('id')
-    .single();
+  const now = new Date().toISOString();
+  const rows = await sql`
+    INSERT INTO expenses (date, description, amount, createdby, updatedat)
+    VALUES (${payload.date.toISOString()}, ${payload.description || ""}, ${payload.amount}, ${payload.createdBy || null}, ${now})
+    RETURNING id
+  `;
 
-  if (error) {
-    console.error("[Supabase] Failed to create expense:", error);
-    throw error;
-  }
-
-  return data?.id;
+  return rows[0]?.id;
 }
 
 // ==========================================
@@ -699,18 +553,17 @@ export async function createExpense(payload: { date: Date; description?: string;
 // ==========================================
 
 export async function getDailyBalance(date: Date) {
-  if (!supabaseServer) return undefined;
+  if (!sql) return undefined;
   const { start, end } = normalizeDateRange(date, date);
 
-  const { data, error } = await supabaseServer
-    .from('dailybalance')
-    .select('*')
-    .gte('date', start.toISOString())
-    .lte('date', end.toISOString())
-    .limit(1)
-    .maybeSingle();
+  const rows = await sql`
+    SELECT * FROM dailybalance
+    WHERE date >= ${start.toISOString()} AND date <= ${end.toISOString()}
+    LIMIT 1
+  `;
 
-  if (error || !data) return undefined;
+  if (!rows || rows.length === 0) return undefined;
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -726,50 +579,35 @@ export async function getDailyBalance(date: Date) {
 }
 
 export async function upsertDailyBalance(date: Date, sale: { totalPrice: number; paymentMethod: "efectivo" | "transferencia" | "fiado" }) {
-  if (!supabaseServer) return undefined;
-  const { start, end } = normalizeDateRange(date, date);
+  if (!sql) return undefined;
+  const { start } = normalizeDateRange(date, date);
   const delta = buildDailyBalanceDelta(sale);
 
   const existing = await getDailyBalance(date);
+  const now = new Date().toISOString();
 
   if (existing) {
-    const { data, error } = await supabaseServer
-      .from('dailybalance')
-      .update({
-        totalsales: (existing.totalSales || 0) + delta.totalSales,
-        cashsales: (existing.cashSales || 0) + delta.cashSales,
-        transfersales: (existing.transferSales || 0) + delta.transferSales,
-        creditsales: (existing.creditSales || 0) + delta.creditSales,
-        updatedat: new Date().toISOString(),
-      })
-      .eq('id', existing.id)
-      .select('id')
-      .single();
+    const newTotal = (existing.totalSales || 0) + delta.totalSales;
+    const newCash = (existing.cashSales || 0) + delta.cashSales;
+    const newTransfer = (existing.transferSales || 0) + delta.transferSales;
+    const newCredit = (existing.creditSales || 0) + delta.creditSales;
 
-    if (error) {
-      console.error("[Supabase] Failed to update daily balance:", error);
-      return undefined;
-    }
-    return data?.id;
+    const rows = await sql`
+      UPDATE dailybalance
+      SET totalsales = ${newTotal}, cashsales = ${newCash}, transfersales = ${newTransfer}, creditsales = ${newCredit}, updatedat = ${now}
+      WHERE id = ${existing.id}
+      RETURNING id
+    `;
+
+    return rows[0]?.id;
   } else {
-    const { data, error } = await supabaseServer
-      .from('dailybalance')
-      .insert({
-        date: start.toISOString(),
-        totalsales: delta.totalSales,
-        cashsales: delta.cashSales,
-        transfersales: delta.transferSales,
-        creditsales: delta.creditSales,
-        updatedat: new Date().toISOString()
-      })
-      .select('id')
-      .single();
+    const rows = await sql`
+      INSERT INTO dailybalance (date, totalsales, cashsales, transfersales, creditsales, updatedat)
+      VALUES (${start.toISOString()}, ${delta.totalSales}, ${delta.cashSales}, ${delta.transferSales}, ${delta.creditSales}, ${now})
+      RETURNING id
+    `;
 
-    if (error) {
-      console.error("[Supabase] Failed to insert daily balance:", error);
-      return undefined;
-    }
-    return data?.id;
+    return rows[0]?.id;
   }
 }
 
@@ -778,18 +616,17 @@ export async function upsertDailyBalance(date: Date, sale: { totalPrice: number;
 // ==========================================
 
 export async function getCashClosingByDate(date: Date) {
-  if (!supabaseServer) return null;
+  if (!sql) return null;
   const { start, end } = normalizeDateRange(date, date);
 
-  const { data, error } = await supabaseServer
-    .from('cashclosings')
-    .select('*')
-    .gte('date', start.toISOString())
-    .lte('date', end.toISOString())
-    .limit(1)
-    .maybeSingle();
+  const rows = await sql`
+    SELECT * FROM cashclosings
+    WHERE date >= ${start.toISOString()} AND date <= ${end.toISOString()}
+    LIMIT 1
+  `;
 
-  if (error || !data) return null;
+  if (!rows || rows.length === 0) return null;
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -809,15 +646,13 @@ export async function getCashClosingByDate(date: Date) {
 }
 
 export async function getAllCashClosings() {
-  if (!supabaseServer) return [];
-  const { data, error } = await supabaseServer
-    .from('cashclosings')
-    .select('*')
-    .order('date', { ascending: false });
+  if (!sql) return [];
+  const rows = await sql`
+    SELECT * FROM cashclosings
+    ORDER BY date DESC
+  `;
 
-  if (error || !data) return [];
-
-  return data.map((c: any) => ({
+  return rows.map((c: any) => ({
     id: c.id,
     date: new Date(c.date),
     totalSales: c.totalsales,
@@ -835,16 +670,14 @@ export async function getAllCashClosings() {
 }
 
 export async function getRecentCashClosings(limit: number = 20) {
-  if (!supabaseServer) return [];
-  const { data, error } = await supabaseServer
-    .from('cashclosings')
-    .select('*')
-    .order('date', { ascending: false })
-    .limit(limit);
+  if (!sql) return [];
+  const rows = await sql`
+    SELECT * FROM cashclosings
+    ORDER BY date DESC
+    LIMIT ${limit}
+  `;
 
-  if (error || !data) return [];
-
-  return data.map((c: any) => ({
+  return rows.map((c: any) => ({
     id: c.id,
     date: new Date(c.date),
     totalSales: c.totalsales,
@@ -873,32 +706,16 @@ export async function createCashClosing(payload: {
   notes?: string;
   closedBy?: string | null;
 }) {
-  if (!supabaseServer) throw new Error("Supabase connection not available");
+  if (!sql) throw new Error("Neon DB connection not available");
 
-  const { data, error } = await supabaseServer
-    .from('cashclosings')
-    .insert({
-      date: payload.date.toISOString(),
-      totalsales: payload.totalSales,
-      cashsales: payload.cashSales,
-      transfersales: payload.transferSales,
-      creditsales: payload.creditSales,
-      expectedcash: payload.expectedCash,
-      actualcash: payload.actualCash,
-      difference: payload.difference,
-      notes: payload.notes || "",
-      closedby: payload.closedBy || null,
-      updatedat: new Date().toISOString()
-    })
-    .select('id')
-    .single();
+  const now = new Date().toISOString();
+  const rows = await sql`
+    INSERT INTO cashclosings (date, totalsales, cashsales, transfersales, creditsales, expectedcash, actualcash, difference, notes, closedby, updatedat)
+    VALUES (${payload.date.toISOString()}, ${payload.totalSales}, ${payload.cashSales}, ${payload.transferSales}, ${payload.creditSales}, ${payload.expectedCash}, ${payload.actualCash}, ${payload.difference}, ${payload.notes || ""}, ${payload.closedBy || null}, ${now})
+    RETURNING id
+  `;
 
-  if (error) {
-    console.error("[Supabase] Failed to create cash closing:", error);
-    throw error;
-  }
-
-  return data?.id;
+  return rows[0]?.id;
 }
 
 // ==========================================
@@ -918,16 +735,16 @@ export async function getSettingsByUserId(userId: number) {
     updatedAt: new Date(),
   };
 
-  if (!supabaseServer) return defaultSettings;
+  if (!sql) return defaultSettings;
 
-  const { data, error } = await supabaseServer
-    .from('settings')
-    .select('*')
-    .eq('userid', userId)
-    .limit(1)
-    .maybeSingle();
+  const rows = await sql`
+    SELECT * FROM settings
+    WHERE userid = ${userId}
+    LIMIT 1
+  `;
 
-  if (error || !data) return defaultSettings;
+  if (!rows || rows.length === 0) return defaultSettings;
+  const data = rows[0];
 
   return {
     id: data.id,
@@ -949,55 +766,37 @@ export async function upsertSettings(userId: number, data: {
   secondaryColor?: string;
   theme?: "light" | "dark";
 }) {
-  if (!supabaseServer) return undefined;
+  if (!sql) return undefined;
   const existing = await getSettingsByUserId(userId);
+  const now = new Date().toISOString();
 
   if (existing && existing.id !== 0) {
-    const updateObj: any = {
-      updatedat: new Date().toISOString()
-    };
-    if (data.appTitle !== undefined) updateObj.apptitle = data.appTitle;
-    if (data.appLogo !== undefined) updateObj.applogo = data.appLogo;
-    if (data.primaryColor !== undefined) updateObj.primarycolor = data.primaryColor;
-    if (data.secondaryColor !== undefined) updateObj.secondarycolor = data.secondaryColor;
-    if (data.theme !== undefined) updateObj.theme = data.theme;
+    const newAppTitle = data.appTitle !== undefined ? data.appTitle : existing.appTitle;
+    const newAppLogo = data.appLogo !== undefined ? data.appLogo : existing.appLogo;
+    const newPrimary = data.primaryColor !== undefined ? data.primaryColor : existing.primaryColor;
+    const newSecondary = data.secondaryColor !== undefined ? data.secondaryColor : existing.secondaryColor;
+    const newTheme = data.theme !== undefined ? data.theme : existing.theme;
 
-    const { data: updated, error } = await supabaseServer
-      .from('settings')
-      .update(updateObj)
-      .eq('id', existing.id)
-      .select('id')
-      .single();
+    const rows = await sql`
+      UPDATE settings
+      SET apptitle = ${newAppTitle}, applogo = ${newAppLogo}, primarycolor = ${newPrimary}, secondarycolor = ${newSecondary}, theme = ${newTheme}, updatedat = ${now}
+      WHERE id = ${existing.id}
+      RETURNING id
+    `;
 
-    if (error) {
-      console.error("[Supabase] Failed to update settings:", error);
-      return undefined;
-    }
-    return updated?.id;
+    return rows[0]?.id;
   } else {
-    const { data: inserted, error } = await supabaseServer
-      .from('settings')
-      .insert({
-        userid: userId,
-        apptitle: data.appTitle || "Asados Ventas",
-        applogo: data.appLogo || null,
-        primarycolor: data.primaryColor || "#dc2626",
-        secondarycolor: data.secondaryColor || "#f97316",
-        theme: data.theme || "light",
-        updatedat: new Date().toISOString()
-      })
-      .select('id')
-      .single();
+    const rows = await sql`
+      INSERT INTO settings (userid, apptitle, applogo, primarycolor, secondarycolor, theme, updatedat)
+      VALUES (${userId}, ${data.appTitle || "Asados Ventas"}, ${data.appLogo || null}, ${data.primaryColor || "#dc2626"}, ${data.secondaryColor || "#f97316"}, ${data.theme || "light"}, ${now})
+      RETURNING id
+    `;
 
-    if (error) {
-      console.error("[Supabase] Failed to insert settings:", error);
-      return undefined;
-    }
-    return inserted?.id;
+    return rows[0]?.id;
   }
 }
 
-// Product Variants queries (Mocked/Unused since DB doesn't have variants table)
+// Product Variants queries
 export async function getProductVariants(parentProductId: number) {
   return [];
 }

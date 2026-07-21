@@ -484,7 +484,7 @@ export default function CashClosing() {
                   )}
 
                   <Button
-                    onClick={handleGeneratePDF}
+                    onClick={() => handleGeneratePDF()}
                     className="w-full h-11 rounded-xl font-semibold gap-2 mt-2"
                     style={{
                       background: "linear-gradient(135deg, #22c55e, #16a34a)",

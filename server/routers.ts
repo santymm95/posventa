@@ -603,8 +603,7 @@ export const appRouter = router({
         
         const difference = input.actualCash - input.expectedCash;
         
-        const isUuid = (v: any) => typeof v === 'string' && /^[0-9a-fA-F-]{36}$/.test(v);
-        const closedByVal = isUuid(ctx.user?.id) ? ctx.user?.id : null;
+        const closedByVal = ctx.user?.id ? String(ctx.user.id) : null;
 
         const resultId = await createCashClosing({
           date: input.date,
@@ -649,9 +648,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         if (!ctx.user?.id) throw new Error("User not authenticated");
-        // only pass createdBy if it's a UUID (Supabase auth user), otherwise leave null
-        const isUuid = (v: any) => typeof v === 'string' && /^[0-9a-fA-F-]{36}$/.test(v);
-        const createdBy = isUuid(ctx.user.id) ? ctx.user.id : null;
+        const createdBy = ctx.user.id ? String(ctx.user.id) : null;
 
         const id = await createExpense({
           date: input.date,

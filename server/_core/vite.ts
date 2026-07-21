@@ -65,3 +65,11 @@ export function serveStatic(app: Express) {
     res.sendFile(path.resolve(distPath, "index.html"));
   });
 }
+
+export function resolveStaticDir(rootDir: string = process.cwd()): string {
+  const distPublicPath = path.resolve(rootDir, "dist", "public");
+  if (fs.existsSync(distPublicPath)) {
+    return distPublicPath;
+  }
+  return path.resolve(rootDir, "public");
+}
