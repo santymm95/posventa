@@ -439,7 +439,7 @@ export default function Inventory() {
               }}
             >
               <img
-                src="https://i.postimg.cc/bN1y6MHK/logo-Photoroom.png"
+                src="/images/logo.png"
                 alt="Logo Asados"
                 className="w-full h-full object-contain p-1.5"
                 style={{ filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.1))" }}

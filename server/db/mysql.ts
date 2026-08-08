@@ -31,7 +31,7 @@ function parseDatabaseUrl(databaseUrl: string): DatabaseConfig | null {
 }
 
 export function getDatabaseConfig(): DatabaseConfig | null {
-  const fromUrl = parseDatabaseUrl((process.env.DATABASE_URL || '').trim());
+  const fromUrl = parseDatabaseUrl((process.env.DATABASE_URL || process.env.POSTGRES_URL || '').trim());
   if (fromUrl) {
     return fromUrl;
   }

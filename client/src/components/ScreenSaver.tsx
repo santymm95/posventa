@@ -80,7 +80,7 @@ export default function ScreenSaver() {
         }}
       />
       <img
-        src="https://i.postimg.cc/bN1y6MHK/logo-Photoroom.png"
+        src="/images/logo.png"
         alt="Logo"
         style={{
           maxWidth: "62%",

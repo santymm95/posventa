@@ -1,4 +1,4 @@
-import { sql } from './db/mysql';
+import { sql } from './db/conn';
 import { InsertUser } from "../drizzle/schema";
 
 // Helper functions for dates and calculations

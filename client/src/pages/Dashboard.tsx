@@ -262,7 +262,7 @@ export default function Dashboard() {
               }}
             >
               <img 
-                src="https://i.postimg.cc/bN1y6MHK/logo-Photoroom.png" 
+                src="/images/logo.png"
                 alt="Logo Asados" 
                 className="w-full h-full object-contain p-1"
                 style={{ filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.08))" }}
