@@ -1,4 +1,3 @@
-import type { CreateExpressContextOptions } from "@trpc/server/adapters/express";
 import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { COOKIE_NAME } from "@shared/const";
@@ -6,8 +5,8 @@ import { verifyAuthToken } from "./auth";
 import * as db from "../db";
 
 export type TrpcContext = {
-  req: CreateExpressContextOptions["req"];
-  res: CreateExpressContextOptions["res"];
+  req: any;
+  res: any;
   user: User | null;
 };
 
@@ -40,9 +39,7 @@ function buildFallbackUserFromToken(token: string): User | null {
   }
 }
 
-export async function createContext(
-  opts: CreateExpressContextOptions
-): Promise<TrpcContext> {
+export async function createContext(opts: any): Promise<TrpcContext> {
   let user: User | null = null;
 
   try {
