@@ -1,5 +1,12 @@
-import app from "../server/_core/index";
+import { createHTTPHandler } from '@trpc/server/adapters/standalone';
+import { appRouter } from '../server/routers';
+import { createContext } from '../server/_core/context';
 
-export default function handler(req:any, res:any) {
-  return app(req, res);
+const handler = createHTTPHandler({
+  router: appRouter,
+  createContext,
+});
+
+export default function handlerWrapper(req: any, res: any) {
+  return handler(req, res);
 }
