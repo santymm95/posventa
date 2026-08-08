@@ -24,14 +24,12 @@ export default function UsersPage() {
   const [newUserPasswordConfirm, setNewUserPasswordConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
-  const token = typeof window !== "undefined" ? localStorage.getItem("authToken") : null;
   const { data: authUser, isLoading } = trpc.auth.me.useQuery(undefined, {
-    enabled: Boolean(token),
     retry: false,
     refetchOnWindowFocus: false,
   });
   const { data: usersData, refetch: refetchUsers } = trpc.users.list.useQuery(undefined, {
-    enabled: Boolean(token) && Boolean(authUser) && authUser?.role === "admin",
+    enabled: Boolean(authUser) && authUser?.role === "admin",
     retry: false,
     refetchOnWindowFocus: false,
   });
@@ -39,11 +37,6 @@ export default function UsersPage() {
   const deleteUserMutation = trpc.users.delete.useMutation();
 
   useEffect(() => {
-    if (!token) {
-      setLocation("/");
-      return;
-    }
-
     if (isLoading) return;
 
     if (!authUser) {
@@ -66,7 +59,7 @@ export default function UsersPage() {
         }))
       );
     }
-  }, [authUser, isLoading, setLocation, token, usersData]);
+  }, [authUser, isLoading, setLocation, usersData]);
 
   const handleCreateUser = async () => {
     if (!newUserEmail || !newUserPassword || !newUserPasswordConfirm) {

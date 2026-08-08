@@ -9,7 +9,6 @@ import { QuantityKeypad } from "@/components/QuantityKeypad";
 import { useSound } from "@/hooks/useSound";
 import { trpc } from "@/lib/trpc";
 import { formatPriceInputDisplay, parsePriceInput } from "@/lib/priceFormatter";
-import { fetchSupabaseInventory, fetchSupabaseProducts } from "@/lib/supabaseData";
 import {
   DndContext,
   closestCenter,
@@ -246,107 +245,8 @@ export default function Sales() {
         return;
       }
 
-      const supabaseProducts = await fetchSupabaseProducts();
-      const supabaseInventory = await fetchSupabaseInventory();
-
       const dbProducts = (allProducts ?? []).filter((p: any) => p.active !== 0);
       const dbInventoryRows = todayInventory ?? [];
-      const hasDbData = dbProducts.length > 0 || dbInventoryRows.length > 0;
-      const hasSupabaseData =
-        Array.isArray(supabaseProducts) &&
-        Array.isArray(supabaseInventory) &&
-        (supabaseProducts.length > 0 || supabaseInventory.length > 0);
-
-      if (!hasDbData && hasSupabaseData) {
-        const activeProducts = supabaseProducts.filter((p: any) => p.active !== 0);
-        const inventoryMap: Record<number, InventoryItem> = {};
-        const mappedInventory: InventoryItem[] = [];
-        const inventoryGroups = new Map<number, InventoryItem>();
-
-        activeProducts.forEach((product: any) => {
-          const inventoryEntry = supabaseInventory.find((inv: any) => inv.productId === product.id);
-          const parentInventoryEntry = product.parentProductId
-            ? supabaseInventory.find((inv: any) => inv.productId === product.parentProductId)
-            : undefined;
-          const sourceInventory = parentInventoryEntry || inventoryEntry;
-
-          if (!sourceInventory) return;
-
-          const groupKey = product.parentProductId || product.id;
-          const normalizedInventory: InventoryItem = {
-            id: Number(sourceInventory.id),
-            productId: Number(sourceInventory.productId),
-            name: product?.name || "Producto",
-            image: product?.image || "",
-            price: (product?.price || 0) / 100,
-            quantity: Number(sourceInventory?.quantity ?? 0),
-            previousDayQuantity: Number(sourceInventory?.previousDayQuantity ?? 0),
-          };
-
-          if (!inventoryGroups.has(groupKey)) {
-            const item: InventoryItem = {
-              ...normalizedInventory,
-              name: product?.name || "Producto",
-              image: product?.image || "",
-              price: (product?.price || 0) / 100,
-            };
-            inventoryGroups.set(groupKey, item);
-            mappedInventory.push(item);
-          }
-
-          const item = inventoryGroups.get(groupKey) || {
-            ...normalizedInventory,
-            name: product?.name || "Producto",
-            image: product?.image || "",
-            price: (product?.price || 0) / 100,
-          };
-
-          inventoryMap[product.id] = item;
-        });
-
-        setInventory(inventoryMap);
-        setInventoryItems(mappedInventory);
-
-        const mainProducts = activeProducts.filter((p: any) => !p.parentProductId);
-        const dynamicProducts: Product[] = mainProducts.map((product: any) => ({
-          id: product.id,
-          name: product.name,
-          price: typeof product.price === "number" ? product.price / 100 : 0,
-          category: product.category,
-          image: product.image || "",
-          productId: product.id,
-        }));
-
-        const variants = activeProducts.filter((p: any) => p.parentProductId);
-        const variantProducts: Product[] = variants.map((variant: any) => ({
-          id: variant.id,
-          name: variant.name,
-          price: typeof variant.price === "number" ? variant.price / 100 : 0,
-          category: variant.category,
-          image: variant.image || "",
-          productId: variant.id,
-        }));
-
-        const savedOrder = localStorage.getItem('productOrder');
-        let sortedProducts = [...dynamicProducts, ...variantProducts];
-        
-        if (savedOrder) {
-          try {
-            const order = JSON.parse(savedOrder);
-            const orderedProducts = order
-              .map((id: number) => sortedProducts.find(p => p.id === id))
-              .filter(Boolean) as Product[];
-            const existingIds = new Set(orderedProducts.map(p => p.id));
-            const newProducts = sortedProducts.filter(p => !existingIds.has(p.id));
-            sortedProducts = [...orderedProducts, ...newProducts];
-          } catch (e) {
-            console.error('Error al cargar el orden guardado:', e);
-          }
-        }
-        
-        setProducts(sortedProducts);
-        return;
-      }
 
       if (todayInventory && allProducts) {
         const activeProducts = allProducts.filter((p: any) => p.active !== 0);

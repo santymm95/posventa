@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   ShoppingCart,
   Package,
@@ -13,9 +14,22 @@ import {
   TrendingUp,
   Flame,
   ChevronRight,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/lib/trpc";
+
+const getDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateInput = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -25,104 +39,39 @@ export default function Dashboard() {
   });
   const logoutMutation = trpc.auth.logout.useMutation();
 
-  const [summary, setSummary] = useState({
-    totalSales: 0,
-    totalCash: 0,
-    totalTransfer: 0,
-    totalCredit: 0,
-    totalExpenses: 0,
-    netProfit: 0,
-    transactionCount: 0,
-  });
+  const [selectedDate, setSelectedDate] = useState(getDateString(new Date()));
 
-  useEffect(() => {
-    if (!user) return;
+  const { data: reportData } = trpc.reports.dailyBalance.useQuery(
+    { date: parseDateInput(selectedDate) },
+    { enabled: Boolean(user) }
+  );
 
-    const loadSummary = async () => {
-      try {
-        // Use cookie-based session; no local token header
-        const token = "";
-        const now = new Date().toISOString();
-        const payload = {
-          "0": {
-            json: { date: now },
-            meta: { values: { date: ["Date"] } },
-          },
-        };
+  const { data: expensesData } = trpc.expenses.byDate.useQuery(
+    { date: parseDateInput(selectedDate) },
+    { enabled: Boolean(user) }
+  );
 
-        const balanceResponse = await fetch(
-          `/api/trpc/reports.dailyBalance?batch=1&input=${encodeURIComponent(JSON.stringify(payload))}`,
-          { credentials: "include" }
-        );
-        const balancePayload = await balanceResponse.json();
-        const balanceData = Array.isArray(balancePayload)
-          ? balancePayload[0]?.result?.data?.json
-          : balancePayload;
+  const summary = useMemo(() => {
+    const totalSales = (reportData?.totalSales ?? 0) / 100;
+    const totalCash = (reportData?.cashSales ?? 0) / 100;
+    const totalTransfer = (reportData?.transferSales ?? 0) / 100;
+    const totalCredit = (reportData?.creditSales ?? 0) / 100;
+    const totalExpenses = Array.isArray(expensesData)
+      ? expensesData.reduce((sum: number, expense: any) => sum + (expense.amount || 0), 0) / 100
+      : 0;
+    const netProfit = totalSales - totalExpenses;
+    const transactionCount = reportData?.transactionCount ?? 0;
 
-        const salesResponse = await fetch(
-          `/api/trpc/sales.byDate?batch=1&input=${encodeURIComponent(JSON.stringify(payload))}`,
-          { credentials: "include" }
-        );
-        const salesPayload = await salesResponse.json();
-        const salesData = Array.isArray(salesPayload)
-          ? salesPayload[0]?.result?.data?.json
-          : salesPayload;
-
-        const expensesResponse = await fetch(
-          `/api/trpc/expenses.byDate?batch=1&input=${encodeURIComponent(JSON.stringify(payload))}`,
-          { credentials: "include" }
-        );
-        const expensesPayload = await expensesResponse.json();
-        const expensesData = Array.isArray(expensesPayload)
-          ? expensesPayload[0]?.result?.data?.json
-          : expensesPayload;
-
-        if (balanceData && (balanceData.totalSales || balanceData.cashSales || balanceData.transferSales || balanceData.creditSales)) {
-          const expensesTotal = Array.isArray(expensesData) ? (expensesData.reduce((s: number, e: any) => s + (e.amount || 0), 0) / 100) : 0;
-          const totalSalesCalc = (balanceData.totalSales || 0) / 100;
-          setSummary({
-            totalSales: totalSalesCalc,
-            totalCash: (balanceData.cashSales || 0) / 100,
-            totalTransfer: (balanceData.transferSales || 0) / 100,
-            totalCredit: (balanceData.creditSales || 0) / 100,
-            totalExpenses: expensesTotal,
-            netProfit: totalSalesCalc - expensesTotal,
-            transactionCount: balanceData.transactionCount || salesData?.length || 0,
-          });
-          return;
-        }
-
-        if (Array.isArray(salesData)) {
-          let totalAmount = 0;
-          let cashAmount = 0;
-          let transferAmount = 0;
-          let creditAmount = 0;
-          salesData.forEach((sale: any) => {
-            const amount = sale.totalPrice / 100;
-            totalAmount += amount;
-            if (sale.paymentMethod === "efectivo") cashAmount += amount;
-            else if (sale.paymentMethod === "transferencia") transferAmount += amount;
-            else if (sale.paymentMethod === "fiado") creditAmount += amount;
-          });
-
-          const expensesTotal = Array.isArray(expensesData) ? (expensesData.reduce((s: number, e: any) => s + (e.amount || 0), 0) / 100) : 0;
-          setSummary({
-            totalSales: totalAmount,
-            totalCash: cashAmount,
-            totalTransfer: transferAmount,
-            totalCredit: creditAmount,
-            totalExpenses: expensesTotal,
-            netProfit: totalAmount - expensesTotal,
-            transactionCount: salesData.length,
-          });
-        }
-      } catch (error) {
-        console.error("Error loading dashboard summary", error);
-      }
+    return {
+      totalSales,
+      totalCash,
+      totalTransfer,
+      totalCredit,
+      totalExpenses,
+      netProfit,
+      transactionCount,
     };
-
-    loadSummary();
-  }, [user]);
+  }, [reportData, expensesData]);
 
   useEffect(() => {
     if (!isLoading && user === null) {
@@ -363,17 +312,38 @@ export default function Dashboard() {
       <main className="container mx-auto px-4 py-10 relative">
         {/* Bienvenida */}
         <div className="mb-10 animate-fade-in">
-          <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#f97316" }}>
-            Panel Principal
-          </p>
-          <h2 className="text-3xl font-bold" style={{ color: "var(--foreground)" }}>
-            ¡Hola, {user?.email?.split("@")[0] || "Usuario"}! 👋
-          </h2>
-          <p className="mt-1.5 text-sm" style={{ color: "oklch(0.55 0.01 260)" }}>
-            {isAdmin
-              ? "Selecciona una sección para gestionar tu negocio"
-              : "Accede a ventas para registrar transacciones"}
-          </p>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-1" style={{ color: "#f97316" }}>
+                Panel Principal
+              </p>
+              <h2 className="text-3xl font-bold" style={{ color: "var(--foreground)" }}>
+                ¡Hola, {user?.email?.split("@")[0] || "Usuario"}! 👋
+              </h2>
+              <p className="mt-1.5 text-sm" style={{ color: "oklch(0.55 0.01 260)" }}>
+                {isAdmin
+                  ? "Selecciona una sección para gestionar tu negocio"
+                  : "Accede a ventas para registrar transacciones"}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 shadow-sm"
+              style={{ backdropFilter: "blur(12px)" }}>
+              <Calendar className="w-4 h-4 text-orange-500" />
+              <div className="flex items-center gap-2">
+                <label htmlFor="dashboard-date" className="text-xs font-semibold" style={{ color: "oklch(0.55 0.01 260)" }}>
+                  Seleccionar día
+                </label>
+                <Input
+                  id="dashboard-date"
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => setSelectedDate(event.target.value)}
+                  className="w-40 bg-slate-950/10 border-white/10"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Stats — solo admin */}
@@ -490,32 +460,7 @@ export default function Dashboard() {
                     {card.description}
                   </p>
 
-                  <button
-                    id={`btn-access-${card.title.toLowerCase()}`}
-                    className="mt-4 w-full h-9 rounded-lg text-sm font-semibold transition-all"
-                    style={
-                      isRestricted
-                        ? {
-                            background: "rgba(255,255,255,0.05)",
-                            color: "oklch(0.45 0.01 260)",
-                            border: "1px solid rgba(255,255,255,0.06)",
-                            cursor: "not-allowed",
-                          }
-                        : {
-                            background: `linear-gradient(135deg, ${card.gradient.includes("orange") ? "#f97316" : card.gradient.includes("amber") ? "#f59e0b" : card.gradient.includes("red") ? "#ef4444" : card.gradient.includes("violet") ? "#8b5cf6" : card.gradient.includes("emerald") ? "#10b981" : card.gradient.includes("sky") ? "#0ea5e9" : "#64748b"}, ${card.gradient.includes("orange") ? "#ea580c" : card.gradient.includes("amber") ? "#d97706" : card.gradient.includes("red") ? "#dc2626" : card.gradient.includes("violet") ? "#7c3aed" : card.gradient.includes("emerald") ? "#059669" : card.gradient.includes("sky") ? "#0284c7" : "#475569"})`,
-                            color: "white",
-                            boxShadow: `0 0 16px ${card.glowColor}`,
-                          }
-                    }
-                    disabled={isRestricted}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isRestricted) handleRestrictedAccess();
-                      else setLocation(card.href);
-                    }}
-                  >
-                    {isRestricted ? "No disponible" : "Acceder"}
-                  </button>
+                 
                 </div>
               </div>
             );

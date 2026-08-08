@@ -1,4 +1,4 @@
-import { sql } from './db/neon';
+import { sql } from './db/mysql';
 import { InsertUser } from "../drizzle/schema";
 
 // Helper functions for dates and calculations
@@ -182,19 +182,35 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   if (!sql) return;
 
   const now = new Date().toISOString();
-  const email = user.email ? user.email.trim().toLowerCase() : null;
+  
+  // Buscar si el usuario ya existe
+  const existing = await getUserByOpenId(user.openId);
+  
+  if (existing) {
+    // Solo actualizar los campos que se pasaron explícitamente (no son undefined)
+    const email = user.email !== undefined ? (user.email ? user.email.trim().toLowerCase() : null) : existing.email;
+    const name = user.name !== undefined ? (user.name || null) : existing.name;
+    const loginMethod = user.loginMethod !== undefined ? (user.loginMethod || 'local') : existing.loginMethod;
+    const role = user.role !== undefined ? user.role : existing.role;
+    const lastSignedIn = user.lastSignedIn !== undefined ? new Date(user.lastSignedIn).toISOString() : existing.lastSignedIn.toISOString();
 
-  await sql`
-    INSERT INTO users (openid, email, name, loginmethod, role, lastsignedin, updatedat)
-    VALUES (${user.openId}, ${email}, ${user.name || null}, ${user.loginMethod || 'local'}, ${user.role || 'user'}, ${now}, ${now})
-    ON CONFLICT (openid) DO UPDATE SET
-      email = EXCLUDED.email,
-      name = EXCLUDED.name,
-      loginmethod = EXCLUDED.loginmethod,
-      role = EXCLUDED.role,
-      lastsignedin = EXCLUDED.lastsignedin,
-      updatedat = EXCLUDED.updatedat
-  `;
+    await sql`
+      UPDATE users 
+      SET email = ${email}, name = ${name}, loginmethod = ${loginMethod}, role = ${role}, lastsignedin = ${lastSignedIn}, updatedat = ${now}
+      WHERE openid = ${user.openId}
+    `;
+  } else {
+    const email = user.email ? user.email.trim().toLowerCase() : null;
+    const name = user.name || null;
+    const loginMethod = user.loginMethod || 'local';
+    const role = user.role || 'user';
+    const lastSignedIn = user.lastSignedIn ? new Date(user.lastSignedIn).toISOString() : now;
+
+    await sql`
+      INSERT INTO users (openid, email, name, loginmethod, role, lastsignedin, updatedat)
+      VALUES (${user.openId}, ${email}, ${name}, ${loginMethod}, ${role}, ${lastSignedIn}, ${now})
+    `;
+  }
 }
 
 export async function deleteUser(id: number) {

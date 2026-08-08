@@ -3,6 +3,7 @@ import type { User } from "../../drizzle/schema";
 import { sdk } from "./sdk";
 import { COOKIE_NAME } from "@shared/const";
 import { verifyAuthToken } from "./auth";
+import * as db from "../db";
 
 export type TrpcContext = {
   req: CreateExpressContextOptions["req"];
@@ -15,6 +16,7 @@ function buildFallbackUserFromToken(token: string): User | null {
     const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
     const userId = typeof payload.userId === "string" ? Number(payload.userId) : payload.userId;
     const email = typeof payload.email === "string" ? payload.email : null;
+    const openId = typeof payload.openId === "string" ? payload.openId : null;
     const role = payload.role === "admin" ? "admin" : "user";
 
     if (typeof userId !== "number" || !Number.isFinite(userId)) {
@@ -23,8 +25,8 @@ function buildFallbackUserFromToken(token: string): User | null {
 
     return {
       id: userId,
-      openId: `jwt-${userId}`,
-      name: typeof payload.name === "string" ? payload.name : (email || "Administrador"),
+      openId: openId || `jwt-${userId}`,
+      name: typeof payload.name === "string" ? payload.name : (email || "Usuario"),
       email,
       password: null,
       loginMethod: "local",
@@ -70,7 +72,15 @@ export async function createContext(
       }
       const parsed = await sdk.verifySession(sessionCookie);
       if (parsed && parsed.openId) {
-        const fallbackUser: User = {
+        // Try to get user from database first
+        let dbUser: User | undefined;
+        try {
+          dbUser = await db.getUserByOpenId(parsed.openId);
+        } catch {
+          // DB might not be available, continue with fallback
+        }
+
+        const fallbackUser: User = dbUser || {
           id: parsed.openId === 'local-admin' ? 1 : 0,
           openId: parsed.openId,
           name: parsed.name || parsed.openId,
@@ -97,7 +107,16 @@ export async function createContext(
         const token = authHeader.substring(7);
         const verified = await verifyAuthToken(token);
         if (verified && typeof verified.userId === "number") {
-          user = buildFallbackUserFromToken(token);
+          const tokenUser = buildFallbackUserFromToken(token);
+          if (tokenUser) {
+            // Try to get updated user from database
+            try {
+              const dbUser = await db.getUserById(tokenUser.id);
+              user = dbUser || tokenUser;
+            } catch {
+              user = tokenUser;
+            }
+          }
         }
       }
     } catch {

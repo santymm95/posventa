@@ -10,7 +10,6 @@ import { QuantityKeypad } from "@/components/QuantityKeypad";
 import { trpc } from "@/lib/trpc";
 import { formatPriceDisplay, parsePriceInput } from "@/lib/priceFormatter";
 import { buildVariantInventoryPayloads } from "@/lib/productInventory";
-import { fetchSupabaseInventory, fetchSupabaseProducts } from "@/lib/supabaseData";
 
 interface InventoryItem {
   id: number;
@@ -86,57 +85,23 @@ export default function Inventory() {
         return;
       }
 
-      const supabaseProducts = await fetchSupabaseProducts();
-      const supabaseInventory = await fetchSupabaseInventory();
-
       const visibleProducts = (allProducts ?? []).filter((product: any) => product.active !== 0);
       const dbInventoryRows = todayInventory ?? [];
-      const hasDbData = visibleProducts.length > 0 || dbInventoryRows.length > 0;
-      const hasSupabaseData =
-        Array.isArray(supabaseProducts) &&
-        Array.isArray(supabaseInventory) &&
-        (supabaseProducts.length > 0 || supabaseInventory.length > 0);
 
-      if (hasDbData) {
-        const mappedInventory = dbInventoryRows
-          .map((inv: any) => {
-            const product = visibleProducts.find((p: any) => p.id === inv.productId);
-            if (!product) return null;
-            return {
-              ...inv,
-              name: product.name || "Producto",
-              image: product.image || "",
-              price: (product.price || 0) / 100,
-            };
-          })
-          .filter(Boolean) as InventoryItem[];
+      const mappedInventory = dbInventoryRows
+        .map((inv: any) => {
+          const product = visibleProducts.find((p: any) => p.id === inv.productId);
+          if (!product) return null;
+          return {
+            ...inv,
+            name: product.name || "Producto",
+            image: product.image || "",
+            price: (product.price || 0) / 100,
+          };
+        })
+        .filter(Boolean) as InventoryItem[];
 
-        setInventory(mappedInventory);
-        setLoading(false);
-        return;
-      }
-
-      if (hasSupabaseData) {
-        const visibleProductsFromSupabase = supabaseProducts.filter((product: any) => product.active !== 0);
-        const mappedInventory = supabaseInventory
-          .map((inv: any) => {
-            const product = visibleProductsFromSupabase.find((p: any) => p.id === inv.productId);
-            if (!product) return null;
-            return {
-              ...inv,
-              name: product.name || "Producto",
-              image: product.image || "",
-              price: (product.price || 0) / 100,
-            };
-          })
-          .filter(Boolean) as InventoryItem[];
-
-        setInventory(mappedInventory);
-        setLoading(false);
-        return;
-      }
-
-      setInventory([]);
+      setInventory(mappedInventory);
       setLoading(false);
     };
 
