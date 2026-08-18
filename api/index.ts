@@ -1,6 +1,7 @@
-export default async function handler(req: any, res: any) {
+import app from "../server/_core/index";
+
+export default function handler(req: any, res: any) {
   try {
-    const { default: app } = await import("../server/_core/index");
     return app(req, res);
   } catch (error: any) {
     console.error("Vercel handler crash:", error);
