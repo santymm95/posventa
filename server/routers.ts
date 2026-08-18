@@ -1,5 +1,5 @@
 import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions, setCookie, clearCookie } from "./_core/cookies";
+import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -46,7 +46,7 @@ export const appRouter = router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
       const cookieOptions = getSessionCookieOptions(ctx.req);
-      clearCookie(ctx.res, COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return {
         success: true,
       } as const;
@@ -64,7 +64,7 @@ export const appRouter = router({
           try {
             const cookieOptions = getSessionCookieOptions(ctx.req);
             console.log('[Auth] Setting session cookie for local-admin', { cookieOptions });
-            setCookie(ctx.res, COOKIE_NAME, sessionToken, { ...cookieOptions });
+            ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions });
           } catch (e) {
             // ignore if cookie cannot be set
           }
@@ -108,7 +108,7 @@ export const appRouter = router({
           try {
             const cookieOptions = getSessionCookieOptions(ctx.req);
             console.log('[Auth] Setting session cookie for DB user', { openId: foundUser.openId, cookieOptions });
-            setCookie(ctx.res, COOKIE_NAME, sessionToken, { ...cookieOptions });
+            ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions });
           } catch {}
 
           return { token: sessionToken, user: foundUser };
@@ -120,7 +120,7 @@ export const appRouter = router({
             try {
               const cookieOptions = getSessionCookieOptions(ctx.req);
               console.log('[Auth] Setting session cookie for local-admin (db-down)', { cookieOptions });
-              setCookie(ctx.res, COOKIE_NAME, sessionToken, { ...cookieOptions });
+              ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions });
             } catch {}
 
             return {

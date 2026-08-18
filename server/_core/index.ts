@@ -28,46 +28,76 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
   throw new Error(`No available port found starting from ${startPort}`);
 }
 
-async function startServer() {
-  const app = express();
-  const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+const app = express();
+const server = createServer(app);
 
-  await initializeDatabase();
+// Configure body parser with larger size limit for file uploads
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-  app.get("/health", (_req, res) => {
-    res.json({ ok: true, database: Boolean(process.env.DATABASE_URL) });
-  });
-
-  // OAuth callback under /api/oauth/callback
-  registerOAuthRoutes(app);
-  // tRPC API
-  app.use(
-    "/api/trpc",
-    createExpressMiddleware({
-      router: appRouter,
-      createContext,
-    })
-  );
-  // development mode uses Vite, production mode uses static files
-  if (process.env.NODE_ENV === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
+// Database initialization promise cached per container lifecycle
+let dbInitialized: Promise<void> | null = null;
+const ensureDatabaseInitialized = () => {
+  if (!dbInitialized) {
+    dbInitialized = initializeDatabase().catch(err => {
+      console.error("Failed to initialize database:", err);
+      dbInitialized = null; // Reset to allow retry on next request
+      throw err;
+    });
   }
+  return dbInitialized;
+};
 
-  const preferredPort = parseInt(process.env.PORT || "3000");
-  const port = await findAvailablePort(preferredPort);
-
-  if (port !== preferredPort) {
-    console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+// Middleware to ensure DB is initialized before handling requests (except health check)
+app.use(async (req, res, next) => {
+  if (req.path === "/health") {
+    return next();
   }
+  try {
+    await ensureDatabaseInitialized();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
-  server.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}/`);
-  });
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, database: Boolean(process.env.DATABASE_URL) });
+});
+
+// OAuth callback under /api/oauth/callback
+registerOAuthRoutes(app);
+
+// tRPC API
+app.use(
+  "/api/trpc",
+  createExpressMiddleware({
+    router: appRouter,
+    createContext,
+  })
+);
+
+// development mode uses Vite, production mode uses static files
+if (process.env.NODE_ENV === "development") {
+  setupVite(app, server).catch(console.error);
+} else {
+  serveStatic(app);
 }
 
-startServer().catch(console.error);
+// Start standalone server only when NOT deploying as a serverless function on Vercel
+if (!process.env.VERCEL) {
+  (async () => {
+    const preferredPort = parseInt(process.env.PORT || "3000");
+    const port = await findAvailablePort(preferredPort);
+
+    if (port !== preferredPort) {
+      console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
+    }
+
+    server.listen(port, () => {
+      console.log(`Server running on http://localhost:${port}/`);
+    });
+  })().catch(console.error);
+}
+
+export default app;
