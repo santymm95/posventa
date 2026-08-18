@@ -88,8 +88,17 @@ if (process.env.NODE_ENV === "development") {
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("Unhandled server error:", err);
   res.status(err.status || 500).json({
-    error: true,
-    message: err.message || "Internal Server Error",
+    error: {
+      json: {
+        message: err.message || "Internal Server Error",
+        code: -32603,
+        data: {
+          code: "INTERNAL_SERVER_ERROR",
+          httpStatus: err.status || 500,
+          stack: err.stack || "",
+        },
+      },
+    },
   });
 });
 
