@@ -84,6 +84,15 @@ if (process.env.NODE_ENV === "development") {
   serveStatic(app);
 }
 
+// Error handling middleware to ensure we always return JSON instead of HTML on crash
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("Unhandled server error:", err);
+  res.status(err.status || 500).json({
+    error: true,
+    message: err.message || "Internal Server Error",
+  });
+});
+
 // Start standalone server only when NOT deploying as a serverless function on Vercel
 if (!process.env.VERCEL) {
   (async () => {
