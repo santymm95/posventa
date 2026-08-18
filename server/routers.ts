@@ -37,7 +37,7 @@ import { sdk } from "./_core/sdk";
 import { printSaleReceipt } from "./_core/printer";
 
 const ADMIN_EMAIL = "admin@gmail.com";
-const ADMIN_PASSWORD = "admin2026*";
+const ADMIN_PASSWORD = "admin123";
 
 export const appRouter = router({
   system: systemRouter,

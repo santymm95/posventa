@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import bcryptjs from "bcryptjs";
-import { comparePasswordWithCandidates, isLocalAdminCredential } from "./_core/auth";
+import { DEFAULT_ADMIN_EMAIL, DEFAULT_ADMIN_PASSWORDS, comparePasswordWithCandidates, isLocalAdminCredential } from "./_core/auth";
 
 beforeAll(() => {
   process.env.JWT_SECRET = process.env.JWT_SECRET || "posventa-dev-secret";
@@ -86,6 +86,9 @@ describe("auth.login", () => {
   });
 
   it("should recognize the local admin fallback credentials", () => {
+    expect(DEFAULT_ADMIN_EMAIL).toBe("admin@gmail.com");
+    expect(DEFAULT_ADMIN_PASSWORDS).toContain("admin123");
+    expect(DEFAULT_ADMIN_PASSWORDS[0]).toBe("admin123");
     expect(isLocalAdminCredential("admin@gmail.com", "admin2026*")).toBe(true);
     expect(isLocalAdminCredential("admin@gmail.com", "admin123")).toBe(true);
     expect(isLocalAdminCredential("admin@gmail.com", "wrong-password")).toBe(false);

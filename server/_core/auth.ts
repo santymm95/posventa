@@ -1,6 +1,9 @@
 import bcrypt from "bcryptjs";
 import { SignJWT, jwtVerify, type JWTPayload } from "jose";
 
+export const DEFAULT_ADMIN_EMAIL = "admin@gmail.com";
+export const DEFAULT_ADMIN_PASSWORDS = ["admin123", "admin2026*"];
+
 const DEFAULT_JWT_SECRET = "posventa-dev-secret";
 
 export function getJwtSecret() {
@@ -15,7 +18,7 @@ export function isLocalAdminCredential(email: string, password: string) {
   const normalizedEmail = email?.trim().toLowerCase();
   const normalizedPassword = password?.trim();
 
-  return normalizedEmail === "admin@gmail.com" && ["admin2026*", "admin123"].includes(normalizedPassword ?? "");
+  return normalizedEmail === DEFAULT_ADMIN_EMAIL && DEFAULT_ADMIN_PASSWORDS.includes(normalizedPassword ?? "");
 }
 
 export async function comparePassword(password: string, hashedPassword: string) {
