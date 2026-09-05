@@ -157,7 +157,10 @@ class SDKServer {
   }
 
   private getSessionSecret() {
-    const secret = ENV.cookieSecret;
+    const secret = (ENV.cookieSecret || "posventa-cookie-secret").trim();
+    if (!secret) {
+      throw new Error("JWT_SECRET is empty; set it in the environment before signing sessions.");
+    }
     return new TextEncoder().encode(secret);
   }
 

@@ -36,9 +36,9 @@ export function getDatabaseConfig(): DatabaseConfig | null {
     return fromUrl;
   }
 
-  const host = (process.env.DB_HOST || '127.0.0.1').trim();
-  const database = (process.env.DB_NAME || 'asados_ventas').trim();
-  const user = (process.env.DB_USER || 'root').trim();
+  const host = (process.env.DB_HOST || '').trim();
+  const database = (process.env.DB_NAME || '').trim();
+  const user = (process.env.DB_USER || '').trim();
   const password = (process.env.DB_PASSWORD || '').trim();
 
   if (!host || !database || !user) {

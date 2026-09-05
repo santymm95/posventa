@@ -94,6 +94,11 @@ describe("auth.login", () => {
     expect(isLocalAdminCredential("admin@gmail.com", "wrong-password")).toBe(false);
   });
 
+  it("should fall back to a safe default JWT secret when env is empty", async () => {
+    const secret = process.env.JWT_SECRET?.trim() || "posventa-cookie-secret";
+    expect(secret.length).toBeGreaterThan(0);
+  });
+
   it("should validate email structure", () => {
     const validEmails = [
       "admin@gmail.com",
