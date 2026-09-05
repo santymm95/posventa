@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router, protectedProcedure } from "./_core/trpc";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import { systemRouter } from "./_core/systemRouter.js";
+import { publicProcedure, router, protectedProcedure } from "./_core/trpc.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { 
@@ -30,11 +30,11 @@ import {
   deleteUser,
   createSale,
   createCashClosing
-} from "./db";
-import { getExpensesByDate, getRecentExpenses, getExpensesByDateRange, createExpense } from "./db";
-import { comparePasswordWithCandidates, createAuthToken, hashPassword, isLocalAdminCredential } from "./_core/auth";
-import { sdk } from "./_core/sdk";
-import { printSaleReceipt } from "./_core/printer";
+} from "./db.js";
+import { getExpensesByDate, getRecentExpenses, getExpensesByDateRange, createExpense } from "./db.js";
+import { comparePasswordWithCandidates, createAuthToken, hashPassword, isLocalAdminCredential } from "./_core/auth.js";
+import { sdk } from "./_core/sdk.js";
+import { printSaleReceipt } from "./_core/printer.js";
 
 const ADMIN_EMAIL = "admin@gmail.com";
 const ADMIN_PASSWORD = "admin123";

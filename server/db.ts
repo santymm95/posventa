@@ -1,5 +1,5 @@
-import { sql } from './db/conn';
-import { InsertUser } from "../drizzle/schema";
+import { sql } from './db/conn.js';
+import { InsertUser } from "../drizzle/schema.js";
 
 // Helper functions for dates and calculations
 function parseDateOnly(value: Date | string | number): Date {

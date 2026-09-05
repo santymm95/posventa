@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { sql, isPg } from './conn';
+import { sql, isPg } from './conn.js';
 
 export async function initializeDatabase(): Promise<void> {
   if (!sql) {

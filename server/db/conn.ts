@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { sql as mysqlSql } from './mysql';
-import { sql as neonSql } from './neon';
+import { sql as mysqlSql } from './mysql.js';
+import { sql as neonSql } from './neon.js';
 
 const databaseUrl = (
 	process.env.DATABASE_URL ||
