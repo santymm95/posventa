@@ -68,20 +68,34 @@ app.get("/health", (_req, res) => {
 // OAuth callback under /api/oauth/callback
 registerOAuthRoutes(app);
 
-// tRPC API
+// tRPC API (supports /api/trpc and /trpc when Vercel rewrites paths)
 app.use(
-  "/api/trpc",
+  ["/api/trpc", "/trpc"],
   createExpressMiddleware({
     router: appRouter,
     createContext,
   })
 );
 
-// development mode uses Vite, production mode uses static files
+// development mode uses Vite, standalone production mode uses static files.
+// On Vercel, static files are served by Vercel CDN; serverless function handles API only.
 if (process.env.NODE_ENV === "development") {
   setupVite(app, server).catch(console.error);
-} else {
+} else if (!process.env.VERCEL) {
   serveStatic(app);
+} else {
+  // Fallback for API requests on Vercel if no route matched
+  app.use((req, res) => {
+    res.status(404).json({
+      error: {
+        json: {
+          message: `API route not found: ${req.method} ${req.path}`,
+          code: -32601,
+          data: { code: "NOT_FOUND", httpStatus: 404 },
+        },
+      },
+    });
+  });
 }
 
 // Error handling middleware to ensure we always return JSON instead of HTML on crash
