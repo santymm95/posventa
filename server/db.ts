@@ -71,9 +71,9 @@ export async function getUserByEmail(email: string) {
     password: data.password,
     loginMethod: data.loginmethod,
     role: data.role,
-    createdAt: new Date(data.createdat),
-    updatedAt: new Date(data.updatedat),
-    lastSignedIn: new Date(data.lastsignedin),
+    createdAt: data.createdat ? new Date(data.createdat) : new Date(),
+    updatedAt: data.updatedat ? new Date(data.updatedat) : new Date(),
+    lastSignedIn: data.lastsignedin ? new Date(data.lastsignedin) : new Date(),
   };
 }
 
@@ -96,9 +96,9 @@ export async function getUserByOpenId(openId: string) {
     password: data.password,
     loginMethod: data.loginmethod,
     role: data.role,
-    createdAt: new Date(data.createdat),
-    updatedAt: new Date(data.updatedat),
-    lastSignedIn: new Date(data.lastsignedin),
+    createdAt: data.createdat ? new Date(data.createdat) : new Date(),
+    updatedAt: data.updatedat ? new Date(data.updatedat) : new Date(),
+    lastSignedIn: data.lastsignedin ? new Date(data.lastsignedin) : new Date(),
   };
 }
 
@@ -121,9 +121,9 @@ export async function getUserById(id: number) {
     password: data.password,
     loginMethod: data.loginmethod,
     role: data.role,
-    createdAt: new Date(data.createdat),
-    updatedAt: new Date(data.updatedat),
-    lastSignedIn: new Date(data.lastsignedin),
+    createdAt: data.createdat ? new Date(data.createdat) : new Date(),
+    updatedAt: data.updatedat ? new Date(data.updatedat) : new Date(),
+    lastSignedIn: data.lastsignedin ? new Date(data.lastsignedin) : new Date(),
   };
 }
 

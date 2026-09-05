@@ -1,5 +1,6 @@
 import 'dotenv/config';
-import { sql, isPg } from './conn.js';
+import { sql, isPg } from './conn';
+
 
 export async function initializeDatabase(): Promise<void> {
   if (!sql) {
@@ -10,135 +11,133 @@ export async function initializeDatabase(): Promise<void> {
   if (isPg) {
     console.log('[PostgreSQL] Initializing schema...');
     
-    await sql`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        openid VARCHAR(64) UNIQUE NOT NULL,
-        name TEXT,
-        email VARCHAR(320) UNIQUE,
-        password VARCHAR(255),
-        loginmethod VARCHAR(64),
-        role VARCHAR(50) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        lastsignedin TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        price INTEGER NOT NULL,
-        image TEXT,
-        category VARCHAR(100) NOT NULL DEFAULT 'General',
-        parentproductid INTEGER,
-        active INTEGER NOT NULL DEFAULT 1,
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS productvariants (
-        id SERIAL PRIMARY KEY,
-        productid INTEGER NOT NULL,
-        name VARCHAR(255) NOT NULL,
-        price INTEGER,
-        active INTEGER NOT NULL DEFAULT 1,
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS inventory (
-        id SERIAL PRIMARY KEY,
-        productid INTEGER NOT NULL,
-        date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        quantity INTEGER NOT NULL,
-        previousdayquantity INTEGER NOT NULL DEFAULT 0,
-        sold INTEGER NOT NULL DEFAULT 0,
-        remaining INTEGER NOT NULL,
-        notes TEXT,
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS sales (
-        id SERIAL PRIMARY KEY,
-        productid INTEGER NOT NULL,
-        quantity INTEGER NOT NULL,
-        unitprice INTEGER NOT NULL,
-        totalprice INTEGER NOT NULL,
-        paymentmethod VARCHAR(50) NOT NULL,
-        date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        notes TEXT,
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS dailybalance (
-        id SERIAL PRIMARY KEY,
-        date TIMESTAMP NOT NULL,
-        totalsales INTEGER NOT NULL DEFAULT 0,
-        cashsales INTEGER NOT NULL DEFAULT 0,
-        transfersales INTEGER NOT NULL DEFAULT 0,
-        creditsales INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS cashclosings (
-        id SERIAL PRIMARY KEY,
-        date TIMESTAMP NOT NULL,
-        totalsales INTEGER NOT NULL DEFAULT 0,
-        cashsales INTEGER NOT NULL DEFAULT 0,
-        transfersales INTEGER NOT NULL DEFAULT 0,
-        creditsales INTEGER NOT NULL DEFAULT 0,
-        expectedcash INTEGER NOT NULL DEFAULT 0,
-        actualcash INTEGER NOT NULL DEFAULT 0,
-        difference INTEGER NOT NULL DEFAULT 0,
-        notes TEXT,
-        closedby VARCHAR(100),
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS settings (
-        id SERIAL PRIMARY KEY,
-        userid INTEGER NOT NULL,
-        apptitle VARCHAR(255) NOT NULL DEFAULT 'Asados Ventas',
-        applogo TEXT,
-        primarycolor VARCHAR(7) NOT NULL DEFAULT '#dc2626',
-        secondarycolor VARCHAR(7) NOT NULL DEFAULT '#f97316',
-        theme VARCHAR(50) NOT NULL DEFAULT 'light',
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
-    await sql`
-      CREATE TABLE IF NOT EXISTS expenses (
-        id SERIAL PRIMARY KEY,
-        date TIMESTAMP NOT NULL,
-        description TEXT,
-        amount INTEGER NOT NULL,
-        createdby INTEGER,
-        createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
+    try {
+      await Promise.all([
+        sql`
+          CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            openid VARCHAR(64) UNIQUE NOT NULL,
+            name TEXT,
+            email VARCHAR(320) UNIQUE,
+            password VARCHAR(255),
+            loginmethod VARCHAR(64),
+            role VARCHAR(50) NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            lastsignedin TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            price INTEGER NOT NULL,
+            image TEXT,
+            category VARCHAR(100) NOT NULL DEFAULT 'General',
+            parentproductid INTEGER,
+            active INTEGER NOT NULL DEFAULT 1,
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS productvariants (
+            id SERIAL PRIMARY KEY,
+            productid INTEGER NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            price INTEGER,
+            active INTEGER NOT NULL DEFAULT 1,
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS inventory (
+            id SERIAL PRIMARY KEY,
+            productid INTEGER NOT NULL,
+            date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            quantity INTEGER NOT NULL,
+            previousdayquantity INTEGER NOT NULL DEFAULT 0,
+            sold INTEGER NOT NULL DEFAULT 0,
+            remaining INTEGER NOT NULL,
+            notes TEXT,
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS sales (
+            id SERIAL PRIMARY KEY,
+            productid INTEGER NOT NULL,
+            quantity INTEGER NOT NULL,
+            unitprice INTEGER NOT NULL,
+            totalprice INTEGER NOT NULL,
+            paymentmethod VARCHAR(50) NOT NULL,
+            date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT,
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS dailybalance (
+            id SERIAL PRIMARY KEY,
+            date TIMESTAMP NOT NULL,
+            totalsales INTEGER NOT NULL DEFAULT 0,
+            cashsales INTEGER NOT NULL DEFAULT 0,
+            transfersales INTEGER NOT NULL DEFAULT 0,
+            creditsales INTEGER NOT NULL DEFAULT 0,
+            notes TEXT,
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS cashclosings (
+            id SERIAL PRIMARY KEY,
+            date TIMESTAMP NOT NULL,
+            totalsales INTEGER NOT NULL DEFAULT 0,
+            cashsales INTEGER NOT NULL DEFAULT 0,
+            transfersales INTEGER NOT NULL DEFAULT 0,
+            creditsales INTEGER NOT NULL DEFAULT 0,
+            expectedcash INTEGER NOT NULL DEFAULT 0,
+            actualcash INTEGER NOT NULL DEFAULT 0,
+            difference INTEGER NOT NULL DEFAULT 0,
+            notes TEXT,
+            closedby VARCHAR(100),
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS settings (
+            id SERIAL PRIMARY KEY,
+            userid INTEGER NOT NULL,
+            apptitle VARCHAR(255) NOT NULL DEFAULT 'Asados Ventas',
+            applogo TEXT,
+            primarycolor VARCHAR(7) NOT NULL DEFAULT '#dc2626',
+            secondarycolor VARCHAR(7) NOT NULL DEFAULT '#f97316',
+            theme VARCHAR(50) NOT NULL DEFAULT 'light',
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `,
+        sql`
+          CREATE TABLE IF NOT EXISTS expenses (
+            id SERIAL PRIMARY KEY,
+            date TIMESTAMP NOT NULL,
+            description TEXT,
+            amount INTEGER NOT NULL,
+            createdby INTEGER,
+            createdat TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updatedat TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+        `
+      ]);
+    } catch (e) {
+      console.warn('[PostgreSQL] Non-fatal error initializing tables:', e);
+    }
 
     console.log('[PostgreSQL] Database schema is ready. Seeding if needed...');
 

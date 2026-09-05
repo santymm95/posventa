@@ -9,7 +9,8 @@ async function verify() {
   try {
     const tables = ['users', 'products', 'inventory', 'sales', 'dailybalance', 'cashclosings', 'settings', 'expenses'];
     for (const table of tables) {
-      const rows = await sql(`SELECT COUNT(*) as count FROM ${table}`);
+      const rows = await sql.query(`SELECT COUNT(*) as count FROM ${table}`);
+
       console.log(`Table '${table}': ${rows[0].count} rows`);
     }
 
