@@ -1,4 +1,4 @@
-import app from "../server/_core/index";
+import app from "../server/_core/index.js";
 
 export default function handler(req: any, res: any) {
   try {
